@@ -1,5 +1,8 @@
 from datetime import date
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from sklearn.linear_model import LinearRegression
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -39,6 +42,8 @@ if "abrir_modal_vol" not in st.session_state:
     st.session_state.abrir_modal_vol = False
 if "abrir_modal_rend" not in st.session_state:
     st.session_state.abrir_modal_rend = False
+if "abrir_modal_otim" not in st.session_state:
+    st.session_state.abrir_modal_otim = False
 
 if "etapa_modal_vol" not in st.session_state:
     st.session_state.etapa_modal_vol = 1
@@ -65,9 +70,9 @@ if "lista_lancamentos" not in st.session_state:
         {
             "id": "l_1",
             "titulo": "Lançamento 16/06/2023",
-            "status": "Em andamento",
+            "status": "Finalizado",
             "data_str": "16/06/2023 • 31 dias de digestão",
-            "tem_grafico": False,
+            "tem_grafico": True,
             "massa_sv_total_val": 14.40,
             "massa_sv_total": "14.40 g SV",
             "carga_volumetrica": "0.082 g SV/mL",
@@ -102,8 +107,39 @@ if "lista_lancamentos" not in st.session_state:
                         {"nome": "Substrato 1", "qtd": "87.5 g"},
                     ],
                 },
+                {
+                    "proporcao": "1:2",
+                    "carga": "0.082 g SV/mL",
+                    "massa_sv_val": 14.40,
+                    "reagentes": [
+                        {"nome": "Inóculo 1", "qtd": "60.0 mL"},
+                        {"nome": "Substrato 1", "qtd": "120.0 g"},
+                    ],
+                },
             ],
-            "dados_rendimento": None,
+            "dados_rendimento": [
+                {
+                    "composicao": "2:1",
+                    "fracao_metano": 55.0,
+                    "vol_biogas": 310.0,
+                    "vol_ch4": 170.5,
+                    "rendimento": 220.5,
+                },
+                {
+                    "composicao": "1:1",
+                    "fracao_metano": 68.0,
+                    "vol_biogas": 450.0,
+                    "vol_ch4": 306.0,
+                    "rendimento": 380.0,
+                },
+                {
+                    "composicao": "1:2",
+                    "fracao_metano": 62.0,
+                    "vol_biogas": 390.0,
+                    "vol_ch4": 241.8,
+                    "rendimento": 295.0,
+                },
+            ],
         }
     ]
 
@@ -117,31 +153,35 @@ def modal_calcular_volume():
         st.markdown("### 1. Caracterização")
 
         for i, comp in enumerate(st.session_state.compostos):
-            novo_nome = st.text_input(
-                f"Nome do composto {i+1}",
-                value=comp["nome"],
-                key=f"nome_comp_{i}",
-                label_visibility="collapsed",
-            )
-            st.session_state.compostos[i]["nome"] = novo_nome
+            with st.container(border=True):
+                st.markdown(f"**Composto {i+1}**")
 
-            c_val, c_unit = st.columns([3, 1])
-            novo_val = c_val.number_input(
-                f"Valor {i+1}",
-                value=comp["valor"],
-                key=f"val_comp_{i}",
-                label_visibility="collapsed",
-            )
-            nova_unit = c_unit.selectbox(
-                f"Unidade {i+1}",
-                ["g/mL", "g/g"],
-                index=0 if comp["unidade"] == "g/mL" else 1,
-                key=f"unit_comp_{i}",
-                label_visibility="collapsed",
-            )
+                novo_nome = st.text_input(
+                    f"Nome do composto {i+1}",
+                    value=comp["nome"],
+                    key=f"nome_comp_{i}",
+                    label_visibility="collapsed",
+                    placeholder="Nome do composto",
+                )
+                st.session_state.compostos[i]["nome"] = novo_nome
 
-            st.session_state.compostos[i]["valor"] = novo_val
-            st.session_state.compostos[i]["unidade"] = nova_unit
+                c_val, c_unit = st.columns([3, 1])
+                novo_val = c_val.number_input(
+                    f"Valor {i+1}",
+                    value=comp["valor"],
+                    key=f"val_comp_{i}",
+                    label_visibility="collapsed",
+                )
+                nova_unit = c_unit.selectbox(
+                    f"Unidade {i+1}",
+                    ["g/mL", "g/g"],
+                    index=0 if comp["unidade"] == "g/mL" else 1,
+                    key=f"unit_comp_{i}",
+                    label_visibility="collapsed",
+                )
+
+                st.session_state.compostos[i]["valor"] = novo_val
+                st.session_state.compostos[i]["unidade"] = nova_unit
 
         if st.button("➕ Adicionar composto", key="add_comp"):
             st.session_state.compostos.append(
@@ -157,7 +197,9 @@ def modal_calcular_volume():
 
         _, col_space, col_next = st.columns([2, 1, 2])
         with col_next:
-            if st.button("Próximo ➔", key="btn_vol_next1", use_container_width=True):
+            if st.button(
+                "Próximo ➔", key="btn_vol_next1", use_container_width=True
+            ):
                 st.session_state.etapa_modal_vol = 2
                 st.rerun()
 
@@ -360,7 +402,7 @@ def modal_calcular_volume():
 
 
 # ---------------------------------------------------------
-# MODAL 2: RENDIMENTO POR RÉPLICAS E CÁLCULO DE MÉDIAS
+# MODAL 2: RENDIMENTO POR RÉPLICAS
 # ---------------------------------------------------------
 @st.dialog("Cálculo de Rendimento por Réplicas", width="medium")
 def modal_calcular_rendimento():
@@ -368,7 +410,6 @@ def modal_calcular_rendimento():
         st.warning("Nenhum lançamento registrado até o momento.")
         return
 
-    # ETAPA 1: DIGITAÇÃO POR RÉPLICA
     if st.session_state.etapa_modal_rend == 1:
         titulos_lancamentos = [
             item["titulo"] for item in st.session_state.lista_lancamentos
@@ -464,7 +505,6 @@ def modal_calcular_rendimento():
                 st.session_state.etapa_modal_rend = 2
                 st.rerun()
 
-    # ETAPA 2: RESUMO DAS MÉDIAS CALCULADAS
     elif st.session_state.etapa_modal_rend == 2:
         st.markdown("### 📊 Resultado das Médias Calculadas")
 
@@ -530,6 +570,136 @@ def modal_calcular_rendimento():
 
 
 # ---------------------------------------------------------
+# MODAL 3: ESTIMAR MELHOR COMPOSIÇÃO (ANÁLISE ESTATÍSTICA)
+# ---------------------------------------------------------
+@st.dialog("🎯 Estimativa Estatística da Melhor Composição", width="medium")
+def modal_estimar_composicao():
+    st.markdown("### Análise de Regressão e Otimização")
+
+    # Coleta de histórico dos lançamentos finalizados
+    historico_dados = []
+    for lanc in st.session_state.lista_lancamentos:
+        if lanc["status"] == "Finalizado" and lanc.get("dados_rendimento"):
+            for d in lanc["dados_rendimento"]:
+                try:
+                    partes = [
+                        float(p) for p in d["composicao"].split(":") if p.strip()
+                    ]
+                    if len(partes) >= 2:
+                        tot = sum(partes)
+                        prop_inoculo = partes[0] / tot
+                        prop_substrato = partes[1] / tot
+                        historico_dados.append(
+                            {
+                                "Inóculo": prop_inoculo,
+                                "Substrato": prop_substrato,
+                                "Rendimento": d["rendimento"],
+                                "Metano_pct": d["fracao_metano"],
+                            }
+                        )
+                except Exception:
+                    continue
+
+    if len(historico_dados) < 3:
+        st.warning(
+            "⚠️ São necessários dados de pelo menos 3 composições finalizadas para realizar a análise estatística com precisão."
+        )
+        return
+
+    df = pd.DataFrame(historico_dados)
+
+    # Regressão Polinomial de Mistura (Modelagem Simplex)
+    X = np.column_stack(
+        [
+            df["Inóculo"],
+            df["Substrato"],
+            df["Inóculo"] * df["Substrato"],  # Termo de interação
+        ]
+    )
+    y = df["Rendimento"].values
+
+    model = LinearRegression()
+    model.fit(X, y)
+
+    # Predição da melhor proporção
+    grid_inoculo = np.linspace(0.1, 0.9, 100)
+    melhor_rend = -1
+    melhor_prop = (0.5, 0.5)
+
+    curva_x = []
+    curva_y = []
+
+    for inoc in grid_inoculo:
+        subst = 1.0 - inoc
+        X_pred = np.array([[inoc, subst, inoc * subst]])
+        rend_pred = model.predict(X_pred)[0]
+
+        curva_x.append(inoc)
+        curva_y.append(rend_pred)
+
+        if rend_pred > melhor_rend:
+            melhor_rend = rend_pred
+            melhor_prop = (inoc, subst)
+
+    # R2 Score
+    r2_score = model.score(X, y)
+
+    st.success(f"✨ **Composição Ideal Estimada:**")
+
+    prop_inoc_pct = int(round(melhor_prop[0] * 100))
+    prop_sub_pct = int(round(melhor_prop[1] * 100))
+
+    col_res1, col_res2, col_res3 = st.columns(3)
+    col_res1.metric("Prop. Inóculo", f"{prop_inoc_pct}%")
+    col_res2.metric("Prop. Substrato", f"{prop_sub_pct}%")
+    col_res3.metric("Rendimento Estimado", f"{melhor_rend:.1f} mL/g SV")
+
+    st.caption(f"📈 Nível de Precisão do Modelo ($R^2$): **{r2_score*100:.1f}%**")
+
+    st.write("---")
+    st.markdown("**Curva Estatística de Otimização (Superfície de Resposta)**")
+
+    fig, ax = plt.subplots(figsize=(6, 3))
+    fig.patch.set_facecolor("#18181B")
+    ax.set_facecolor("#18181B")
+
+    ax.plot(
+        curva_x,
+        curva_y,
+        color="#818CF8",
+        linewidth=2.5,
+        label="Modelo Preditivo",
+    )
+    ax.scatter(
+        df["Inóculo"],
+        df["Rendimento"],
+        color="#FACC15",
+        s=50,
+        zorder=5,
+        label="Pontos Experimentais",
+    )
+
+    ax.axvline(
+        x=melhor_prop[0],
+        color="#4ADE80",
+        linestyle="--",
+        label=f"Ponto Ótimo ({prop_inoc_pct}:{prop_sub_pct})",
+    )
+
+    ax.set_xlabel("Fração de Inóculo", color="#A1A1AA", fontsize=9)
+    ax.set_ylabel(
+        "Rendimento (mL CH4/g SV)", color="#A1A1AA", fontsize=9
+    )
+    ax.tick_params(colors="#A1A1AA", labelsize=8)
+    ax.legend(facecolor="#27272A", edgecolor="none", labelcolor="#E4E4E7", fontsize=8)
+
+    for spine in ax.spines.values():
+        spine.set_color("#27272A")
+
+    st.pyplot(fig)
+
+
+# ---------------------------------------------------------
 # INTERFACE PRINCIPAL (DASHBOARD)
 # ---------------------------------------------------------
 st.title("👋 Olá, [nome]!")
@@ -550,13 +720,17 @@ with col_b2:
         st.session_state.abrir_modal_rend = True
 
 with col_b3:
-    st.button("➤ Quero estimar a melhor composição", use_container_width=True)
+    if st.button("➤ Quero estimar a melhor composição", use_container_width=True):
+        st.session_state.abrir_modal_otim = True
 
 if st.session_state.abrir_modal_vol:
     modal_calcular_volume()
 
 if st.session_state.abrir_modal_rend:
     modal_calcular_rendimento()
+
+if st.session_state.abrir_modal_otim:
+    modal_estimar_composicao()
 
 st.write("---")
 st.subheader("Meus lançamentos")

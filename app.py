@@ -155,10 +155,11 @@ def modal_calcular_volume():
 
         st.write("---")
 
-        _, col_next = st.columns([3, 1])
-        if col_next.button("Próximo ➔", key="btn_vol_next1"):
-            st.session_state.etapa_modal_vol = 2
-            st.rerun()
+        _, col_space, col_next = st.columns([2, 1, 2])
+        with col_next:
+            if st.button("Próximo ➔", key="btn_vol_next1", use_container_width=True):
+                st.session_state.etapa_modal_vol = 2
+                st.rerun()
 
     elif st.session_state.etapa_modal_vol == 2:
         st.markdown("### 2. Condições dos reatores")
@@ -205,7 +206,7 @@ def modal_calcular_volume():
 
         st.write("---")
 
-        col_back, col_space, col_next = st.columns([2, 3, 2])
+        col_back, col_space, col_next = st.columns([2, 1, 2])
         with col_back:
             if st.button(
                 "⬅ Voltar", key="btn_vol_back1", use_container_width=True
@@ -247,201 +248,285 @@ def modal_calcular_volume():
 
         st.write("---")
 
-        col_back, col_finish = st.columns([1, 1])
-        if col_back.button("⬅ Voltar", key="btn_vol_back2"):
-            st.session_state.etapa_modal_vol = 2
-            st.rerun()
+        col_back, col_space, col_finish = st.columns([2, 1, 3])
+        with col_back:
+            if st.button(
+                "⬅ Voltar", key="btn_vol_back2", use_container_width=True
+            ):
+                st.session_state.etapa_modal_vol = 2
+                st.rerun()
 
-        if col_finish.button(
-            "🚀 Finalizar e Calcular", type="primary", key="btn_vol_finish"
-        ):
-            vol_frasco = 250.0
-            hs_medio = (
-                st.session_state.condicoes[0]["headspace"]
-                if st.session_state.condicoes
-                else 30.0
-            )
-            vol_util = vol_frasco * (1 - (hs_medio / 100.0))
+        with col_finish:
+            if st.button(
+                "🚀 Finalizar e Calcular",
+                type="primary",
+                key="btn_vol_finish",
+                use_container_width=True,
+            ):
+                vol_frasco = 250.0
+                hs_medio = (
+                    st.session_state.condicoes[0]["headspace"]
+                    if st.session_state.condicoes
+                    else 30.0
+                )
+                vol_util = vol_frasco * (1 - (hs_medio / 100.0))
 
-            compostos_calculados = []
-            qtd_compostos = len(st.session_state.compostos)
-            massa_sv_total = 0.0
+                compostos_calculados = []
+                qtd_compostos = len(st.session_state.compostos)
+                massa_sv_total = 0.0
 
-            total_replicas = sum(
-                c["replicas"] for c in st.session_state.condicoes
-            )
-
-            for c in st.session_state.compostos:
-                unidade = c["unidade"]
-                val_conc = c["valor"] if c["valor"] > 0 else 1.0
-
-                if unidade == "g/mL":
-                    qtd_por_reator = round(
-                        (vol_util / max(1, qtd_compostos)), 1
-                    )
-                    qtd_total_ensaio = round(
-                        qtd_por_reator * max(1, total_replicas), 1
-                    )
-                    qtd_str = f"{qtd_por_reator} mL"
-                    qtd_total_str = f"{qtd_total_ensaio} mL"
-                    massa_sv = qtd_por_reator * (val_conc / 100.0)
-                else:
-                    qtd_por_reator = round(
-                        (vol_util / max(1, qtd_compostos)) * 0.5, 1
-                    )
-                    qtd_total_ensaio = round(
-                        qtd_por_reator * max(1, total_replicas), 1
-                    )
-                    qtd_str = f"{qtd_por_reator} g"
-                    qtd_total_str = f"{qtd_total_ensaio} g"
-                    massa_sv = qtd_por_reator * (val_conc / 100.0)
-
-                massa_sv_total += massa_sv
-
-                compostos_calculados.append(
-                    {
-                        "nome": c["nome"],
-                        "conc": f"{c['valor']} {unidade}",
-                        "qtd": qtd_str,
-                        "qtd_total": qtd_total_str,
-                    }
+                total_replicas = sum(
+                    c["replicas"] for c in st.session_state.condicoes
                 )
 
-            carga_composicao = (
-                massa_sv_total / vol_util if vol_util > 0 else 0.0
-            )
+                for c in st.session_state.compostos:
+                    unidade = c["unidade"]
+                    val_conc = c["valor"] if c["valor"] > 0 else 1.0
 
-            composicoes_estudadas = []
-            for cond in st.session_state.condicoes:
-                reagentes_cond = [
-                    {"nome": comp["nome"], "qtd": comp["qtd"]}
-                    for comp in compostos_calculados
-                ]
-                composicoes_estudadas.append(
-                    {
-                        "proporcao": cond["composicao"],
-                        "carga": f"{carga_composicao:.3f} g SV/mL",
-                        "massa_sv_val": massa_sv_total,
-                        "reagentes": reagentes_cond,
-                    }
+                    if unidade == "g/mL":
+                        qtd_por_reator = round(
+                            (vol_util / max(1, qtd_compostos)), 1
+                        )
+                        qtd_total_ensaio = round(
+                            qtd_por_reator * max(1, total_replicas), 1
+                        )
+                        qtd_str = f"{qtd_por_reator} mL"
+                        qtd_total_str = f"{qtd_total_ensaio} mL"
+                        massa_sv = qtd_por_reator * (val_conc / 100.0)
+                    else:
+                        qtd_por_reator = round(
+                            (vol_util / max(1, qtd_compostos)) * 0.5, 1
+                        )
+                        qtd_total_ensaio = round(
+                            qtd_por_reator * max(1, total_replicas), 1
+                        )
+                        qtd_str = f"{qtd_por_reator} g"
+                        qtd_total_str = f"{qtd_total_ensaio} g"
+                        massa_sv = qtd_por_reator * (val_conc / 100.0)
+
+                    massa_sv_total += massa_sv
+
+                    compostos_calculados.append(
+                        {
+                            "nome": c["nome"],
+                            "conc": f"{c['valor']} {unidade}",
+                            "qtd": qtd_str,
+                            "qtd_total": qtd_total_str,
+                        }
+                    )
+
+                carga_composicao = (
+                    massa_sv_total / vol_util if vol_util > 0 else 0.0
                 )
 
-            novo_id = f"lanc_{len(st.session_state.lista_lancamentos) + 1}"
-            novo_item = {
-                "id": novo_id,
-                "titulo": nome_lancamento,
-                "status": "Em andamento",
-                "data_str": f"{d_inicio.strftime('%d/%m/%Y')} • {dias} dias de digestão",
-                "tem_grafico": False,
-                "massa_sv_total_val": massa_sv_total,
-                "massa_sv_total": f"{massa_sv_total:.2f} g SV",
-                "carga_volumetrica": f"{carga_composicao:.3f} g SV/mL",
-                "compostos": compostos_calculados,
-                "composicoes_estudadas": composicoes_estudadas,
-                "dados_rendimento": None,
-            }
+                composicoes_estudadas = []
+                for cond in st.session_state.condicoes:
+                    reagentes_cond = [
+                        {"nome": comp["nome"], "qtd": comp["qtd"]}
+                        for comp in compostos_calculados
+                    ]
+                    composicoes_estudadas.append(
+                        {
+                            "proporcao": cond["composicao"],
+                            "carga": f"{carga_composicao:.3f} g SV/mL",
+                            "massa_sv_val": massa_sv_total,
+                            "reagentes": reagentes_cond,
+                        }
+                    )
 
-            st.session_state.lista_lancamentos.insert(0, novo_item)
+                novo_id = f"lanc_{len(st.session_state.lista_lancamentos) + 1}"
+                novo_item = {
+                    "id": novo_id,
+                    "titulo": nome_lancamento,
+                    "status": "Em andamento",
+                    "data_str": f"{d_inicio.strftime('%d/%m/%Y')} • {dias} dias de digestão",
+                    "tem_grafico": False,
+                    "massa_sv_total_val": massa_sv_total,
+                    "massa_sv_total": f"{massa_sv_total:.2f} g SV",
+                    "carga_volumetrica": f"{carga_composicao:.3f} g SV/mL",
+                    "compostos": compostos_calculados,
+                    "composicoes_estudadas": composicoes_estudadas,
+                    "dados_rendimento": None,
+                }
 
-            st.session_state.toast_msg = "✅ Lançamento preparado com sucesso!"
-            st.session_state.scroll_to_novo = True
+                st.session_state.lista_lancamentos.insert(0, novo_item)
 
-            st.session_state.etapa_modal_vol = 1
-            st.session_state.abrir_modal_vol = False
-            st.rerun()
+                st.session_state.toast_msg = "✅ Lançamento preparado com sucesso!"
+                st.session_state.scroll_to_novo = True
+
+                st.session_state.etapa_modal_vol = 1
+                st.session_state.abrir_modal_vol = False
+                st.rerun()
 
 
 # ---------------------------------------------------------
-# MODAL 2: RENDIMENTO (PUXANDO DADOS DAS COMPOSIÇÕES)
+# MODAL 2: RENDIMENTO POR RÉPLICAS E CÁLCULO DE MÉDIAS
 # ---------------------------------------------------------
-@st.dialog("Cálculo de Rendimento do Ensaio", width="medium")
+@st.dialog("Cálculo de Rendimento por Réplicas", width="medium")
 def modal_calcular_rendimento():
     if not st.session_state.lista_lancamentos:
         st.warning("Nenhum lançamento registrado até o momento.")
         return
 
-    titulos_lancamentos = [
-        item["titulo"] for item in st.session_state.lista_lancamentos
-    ]
-    escolha_titulo = st.selectbox(
-        "Selecione o Lançamento para puxar os dados:", titulos_lancamentos
-    )
+    # ETAPA 1: DIGITAÇÃO POR RÉPLICA
+    if st.session_state.etapa_modal_rend == 1:
+        titulos_lancamentos = [
+            item["titulo"] for item in st.session_state.lista_lancamentos
+        ]
+        escolha_titulo = st.selectbox(
+            "Selecione o Lançamento para carregar as composições:",
+            titulos_lancamentos,
+            key="select_lanc_rend",
+        )
 
-    # Seleção do item escolhido
-    lanc_selecionado = next(
-        item
-        for item in st.session_state.lista_lancamentos
-        if item["titulo"] == escolha_titulo
-    )
+        lanc_selecionado = next(
+            item
+            for item in st.session_state.lista_lancamentos
+            if item["titulo"] == escolha_titulo
+        )
 
-    st.write("---")
-    st.markdown("**Insira os dados medidos para cada composição:**")
+        st.write("---")
+        st.markdown("**Insira os dados medidos de cada réplica:**")
 
-    composicoes = lanc_selecionado.get("composicoes_estudadas", [])
-    resultados_rendimento = []
+        composicoes = lanc_selecionado.get("composicoes_estudadas", [])
+        num_replicas = (
+            st.session_state.condicoes[0]["replicas"]
+            if st.session_state.condicoes
+            else 3
+        )
 
-    for idx, comp in enumerate(composicoes):
-        prop = comp["proporcao"]
-        massa_sv = comp.get("massa_sv_val", 1.0)
-        carga = comp.get("carga", "N/A")
+        dados_replicas_temp = []
 
-        with st.container(border=True):
-            st.markdown(
-                f"### 🧪 Composição `{prop}` (Carga: `{carga}`, SV: `{massa_sv:.2f} g`)"
-            )
+        for idx_comp, comp in enumerate(composicoes):
+            prop = comp["proporcao"]
+            massa_sv = comp.get("massa_sv_val", 1.0)
 
-            col1, col2 = st.columns(2)
-            metano_pct = col1.number_input(
-                f"Fração de Metano (% CH₄) - Composição {prop}",
-                min_value=0.0,
-                max_value=100.0,
-                value=60.0,
-                step=1.0,
-                key=f"rend_pct_{escolha_titulo}_{idx}",
-            )
-            vol_biogas = col2.number_input(
-                f"Volume de Biogás Total (mL) - Composição {prop}",
-                min_value=0.0,
-                value=350.0,
-                step=10.0,
-                key=f"rend_vol_{escolha_titulo}_{idx}",
-            )
+            with st.container(border=True):
+                st.markdown(
+                    f"### 🧪 Composição `{prop}` ({num_replicas} réplicas)"
+                )
 
-            # Cálculo individual
-            vol_ch4 = vol_biogas * (metano_pct / 100.0)
-            rendimento_esp = vol_ch4 / massa_sv if massa_sv > 0 else 0.0
+                replicas_comp = []
+                for rep in range(1, num_replicas + 1):
+                    st.markdown(f"**Réplica {rep}**")
+                    col1, col2 = st.columns(2)
 
-            st.caption(
-                f"💡 **Volume CH₄ Puro:** `{vol_ch4:.1f} mL` | **Rendimento Calculado:** `{rendimento_esp:.2f} mL CH₄/g SV`"
-            )
+                    metano_pct = col1.number_input(
+                        f"Metano (% CH₄) - R{rep}",
+                        min_value=0.0,
+                        max_value=100.0,
+                        value=60.0,
+                        step=0.5,
+                        key=f"rep_pct_{escolha_titulo}_{idx_comp}_{rep}",
+                    )
+                    vol_biogas = col2.number_input(
+                        f"Biogás Total (mL) - R{rep}",
+                        min_value=0.0,
+                        value=350.0,
+                        step=5.0,
+                        key=f"rep_vol_{escolha_titulo}_{idx_comp}_{rep}",
+                    )
 
-            resultados_rendimento.append(
+                    vol_ch4 = vol_biogas * (metano_pct / 100.0)
+                    rend_esp = vol_ch4 / massa_sv if massa_sv > 0 else 0.0
+
+                    replicas_comp.append(
+                        {
+                            "replica": rep,
+                            "metano_pct": metano_pct,
+                            "vol_biogas": vol_biogas,
+                            "vol_ch4": vol_ch4,
+                            "rendimento": rend_esp,
+                        }
+                    )
+
+                dados_replicas_temp.append(
+                    {
+                        "proporcao": prop,
+                        "massa_sv": massa_sv,
+                        "replicas": replicas_comp,
+                    }
+                )
+
+        st.write("---")
+
+        _, col_space, col_next = st.columns([1, 1, 3])
+        with col_next:
+            if st.button(
+                "Próximo ➔ (Calcular Médias)",
+                type="primary",
+                use_container_width=True,
+            ):
+                st.session_state.temp_rend_data = {
+                    "titulo": escolha_titulo,
+                    "composicoes": dados_replicas_temp,
+                }
+                st.session_state.etapa_modal_rend = 2
+                st.rerun()
+
+    # ETAPA 2: RESUMO DAS MÉDIAS CALCULADAS
+    elif st.session_state.etapa_modal_rend == 2:
+        st.markdown("### 📊 Resultado das Médias Calculadas")
+
+        temp_data = st.session_state.get("temp_rend_data", {})
+        resultados_finais = []
+
+        for comp in temp_data.get("composicoes", []):
+            prop = comp["proporcao"]
+            reps = comp["replicas"]
+
+            media_metano = sum(r["metano_pct"] for r in reps) / len(reps)
+            media_vol_biogas = sum(r["vol_biogas"] for r in reps) / len(reps)
+            media_vol_ch4 = sum(r["vol_ch4"] for r in reps) / len(reps)
+            media_rendimento = sum(r["rendimento"] for r in reps) / len(reps)
+
+            with st.container(border=True):
+                st.markdown(f"**Composição (I:S): `{prop}`**")
+                col_m1, col_m2, col_m3 = st.columns(3)
+
+                col_m1.metric("Média % CH₄", f"{media_metano:.1f}%")
+                col_m2.metric("Média Vol. Biogás", f"{media_vol_biogas:.1f} mL")
+                col_m3.metric(
+                    "Média Rendimento", f"{media_rendimento:.2f} mL/g SV"
+                )
+
+            resultados_finais.append(
                 {
                     "composicao": prop,
-                    "fracao_metano": metano_pct,
-                    "vol_biogas": vol_biogas,
-                    "vol_ch4": vol_ch4,
-                    "rendimento": rendimento_esp,
+                    "fracao_metano": media_metano,
+                    "vol_biogas": media_vol_biogas,
+                    "vol_ch4": media_vol_ch4,
+                    "rendimento": media_rendimento,
                 }
             )
 
-    st.write("---")
+        st.write("---")
 
-    if st.button(
-        "📊 Gerar Gráfico e Salvar Rendimento",
-        type="primary",
-        use_container_width=True,
-    ):
-        # Atualização do lançamento com os resultados finais
-        lanc_selecionado["tem_grafico"] = True
-        lanc_selecionado["status"] = "Finalizado"
-        lanc_selecionado["dados_rendimento"] = resultados_rendimento
+        col_back, col_space, col_save = st.columns([2, 1, 3])
+        with col_back:
+            if st.button("⬅ Voltar", use_container_width=True):
+                st.session_state.etapa_modal_rend = 1
+                st.rerun()
 
-        st.toast(
-            "Gráfico gerado e rendimento registrado com sucesso!", icon="🎉"
-        )
-        st.session_state.abrir_modal_rend = False
-        st.rerun()
+        with col_save:
+            if st.button(
+                "💾 Confirmar e Gerar Gráfico",
+                type="primary",
+                use_container_width=True,
+            ):
+                lanc_target = next(
+                    item
+                    for item in st.session_state.lista_lancamentos
+                    if item["titulo"] == temp_data["titulo"]
+                )
+                lanc_target["tem_grafico"] = True
+                lanc_target["status"] = "Finalizado"
+                lanc_target["dados_rendimento"] = resultados_finais
+
+                st.toast("Médias salvas e gráfico gerado com sucesso!", icon="🎉")
+                st.session_state.etapa_modal_rend = 1
+                st.session_state.abrir_modal_rend = False
+                st.rerun()
 
 
 # ---------------------------------------------------------
@@ -461,6 +546,7 @@ with col_b1:
 
 with col_b2:
     if st.button("➤ Quero calcular o rendimento", use_container_width=True):
+        st.session_state.etapa_modal_rend = 1
         st.session_state.abrir_modal_rend = True
 
 with col_b3:
@@ -475,7 +561,6 @@ if st.session_state.abrir_modal_rend:
 st.write("---")
 st.subheader("Meus lançamentos")
 
-# Renderização dos Lançamentos em Carrossel/Abas
 for idx, item in enumerate(st.session_state.lista_lancamentos):
     if idx == 0:
         st.markdown(
@@ -497,7 +582,6 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
         st.caption(item["data_str"])
         st.write("")
 
-        # Estrutura do Carrossel por Abas
         tab1, tab2, tab3 = st.tabs(
             [
                 "🧪 1. Caracterização",
@@ -506,7 +590,6 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
             ]
         )
 
-        # ABA 1: CARACTERIZAÇÃO
         with tab1:
             st.markdown("**Compostos Registrados**")
             for comp in item["compostos"]:
@@ -522,7 +605,6 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                     f"📦 Volume/Massa total utilizada no ensaio: **{qtd_tot}**"
                 )
 
-        # ABA 2: COMPOSIÇÕES ESTUDADAS E CARGA
         with tab2:
             st.markdown("**Detalhes das Composições e Reagentes**")
             composicoes = item.get("composicoes_estudadas", [])
@@ -542,9 +624,8 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                                 f"• **{r['nome']}**: `Quantidade inserida: {r['qtd']}`"
                             )
 
-        # ABA 3: GRÁFICO DE RENDIMENTO COM DUPLO EIXO Y
         with tab3:
-            st.markdown("**Rendimento e Qualidade do Biogás**")
+            st.markdown("**Rendimento Médio e Qualidade do Biogás**")
             dados_r = item.get("dados_rendimento")
 
             if item["tem_grafico"] and dados_r:
@@ -552,12 +633,10 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                 rendimentos = [d["rendimento"] for d in dados_r]
                 fracoes_ch4 = [d["fracao_metano"] for d in dados_r]
 
-                # Construção do gráfico de barras com duplo eixo Y
                 fig, ax1 = plt.subplots(figsize=(6, 3))
                 fig.patch.set_facecolor("#18181B")
                 ax1.set_facecolor("#18181B")
 
-                # Eixo Y1 (Esquerdo) - Rendimento
                 bars = ax1.bar(
                     comp_labels,
                     rendimentos,
@@ -573,7 +652,6 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                 )
                 ax1.tick_params(colors="#A1A1AA", labelsize=8)
 
-                # Eixo Y2 (Direito) - Fração de Metano
                 ax2 = ax1.twinx()
                 ax2.plot(
                     comp_labels,

@@ -5,61 +5,124 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-# Configuração da página
+# Configuração inicial
 st.set_page_config(
     page_title="Co-digestão Anaeróbia", page_icon="🧪", layout="wide"
 )
 
-# Estilização CSS Dark Theme Avançada
+# Style CSS Otimizado
 st.markdown(
     """
 <style>
-    /* Estilo Geral */
     .stApp { background-color: #0F0F11; color: #E4E4E7; }
-    
-    /* Customização de Badges */
     .badge-status-green {
-        background-color: rgba(34, 197, 94, 0.15);
-        color: #4ADE80;
+        background-color: rgba(34, 197, 94, 0.15); color: #4ADE80;
         border: 1px solid rgba(74, 222, 128, 0.3);
-        padding: 4px 12px; border-radius: 20px;
-        font-size: 12px; font-weight: 600; display: inline-block;
+        padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block;
     }
     .badge-status-yellow {
-        background-color: rgba(234, 179, 8, 0.15);
-        color: #FACC15;
+        background-color: rgba(234, 179, 8, 0.15); color: #FACC15;
         border: 1px solid rgba(250, 204, 21, 0.3);
-        padding: 4px 12px; border-radius: 20px;
-        font-size: 12px; font-weight: 600; display: inline-block;
+        padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block;
     }
     .pill-tag {
-        background-color: #1E1E24; color: #818CF8;
-        border: 1px solid rgba(129, 140, 248, 0.2);
-        padding: 4px 12px; border-radius: 12px;
-        font-size: 13px; font-weight: 600; display: inline-block; margin-bottom: 6px;
+        background-color: #1E1E24; color: #818CF8; border: 1px solid rgba(129, 140, 248, 0.2);
+        padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600; display: inline-block; margin-bottom: 6px;
     }
-
-    /* Melhora visual dos Expanders e Containers */
     div[data-testid="stExpander"] {
-        background-color: #18181C !important;
-        border: 1px solid #27272A !important;
-        border-radius: 12px !important;
-        margin-bottom: 16px !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        background-color: #18181C !important; border: 1px solid #27272A !important;
+        border-radius: 12px !important; margin-bottom: 16px !important;
     }
-    
-    /* Botões Primários */
     button[kind="primary"] {
-        background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%) !important;
-        border: none !important;
-        font-weight: 600 !important;
+        background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%) !important; border: none !important; font-weight: 600 !important;
     }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
-# Inicialização do Session State
+
+# ---------------------------------------------------------
+# FUNÇÕES COM CACHE DE ALTA PERFORMANCE (Evita Re-renderização)
+# ---------------------------------------------------------
+@st.cache_data(show_spinner=False)
+def gerar_grafico_rendimento(labels, rend, ch4):
+    fig, ax1 = plt.subplots(figsize=(6, 2.8))
+    fig.patch.set_facecolor("#18181C")
+    ax1.set_facecolor("#18181C")
+
+    ax1.bar(
+        labels,
+        rend,
+        color="#6366F1",
+        width=0.35,
+        alpha=0.85,
+        label="Rendimento",
+    )
+    ax1.set_ylabel(
+        "mL CH₄ / g SV", color="#818CF8", fontsize=9, fontweight="bold"
+    )
+    ax1.tick_params(colors="#A1A1AA", labelsize=8)
+
+    ax2 = ax1.twinx()
+    ax2.plot(
+        labels, ch4, color="#FACC15", marker="o", linewidth=2, label="% CH₄"
+    )
+    ax2.set_ylabel(
+        "% CH₄ no Biogás", color="#FACC15", fontsize=9, fontweight="bold"
+    )
+    ax2.tick_params(colors="#A1A1AA", labelsize=8)
+    ax2.set_ylim(0, 100)
+
+    for spine in ax1.spines.values():
+        spine.set_color("#27272A")
+    for spine in ax2.spines.values():
+        spine.set_color("#27272A")
+
+    plt.close(fig)  # Libera memória RAM imediatamente
+    return fig
+
+
+@st.cache_data(show_spinner=False)
+def gerar_grafico_otimizacao(curva_x, curva_y, df_inoc, df_rend, p_otima, p1, p2):
+    fig, ax = plt.subplots(figsize=(6, 3))
+    fig.patch.set_facecolor("#18181C")
+    ax.set_facecolor("#18181C")
+
+    ax.plot(
+        curva_x, curva_y, color="#818CF8", linewidth=2.5, label="Modelo Smooth"
+    )
+    ax.scatter(
+        df_inoc,
+        df_rend,
+        color="#FACC15",
+        s=40,
+        zorder=5,
+        label="Histórico",
+    )
+    ax.axvline(
+        x=p_otima,
+        color="#4ADE80",
+        linestyle="--",
+        label=f"Ótimo ({p1}:{p2})",
+    )
+
+    ax.set_xlabel("Proporção de Inóculo", color="#A1A1AA", fontsize=9)
+    ax.set_ylabel("Rendimento (mL CH4/g SV)", color="#A1A1AA", fontsize=9)
+    ax.tick_params(colors="#A1A1AA", labelsize=8)
+    ax.grid(True, linestyle=":", alpha=0.15)
+    ax.legend(
+        facecolor="#27272A", edgecolor="none", labelcolor="#E4E4E7", fontsize=8
+    )
+
+    for spine in ax.spines.values():
+        spine.set_color("#27272A")
+
+    plt.close(fig)  # Libera memória RAM
+    return fig
+
+
+# Inicialização de Estado
 if "modal_ativo" not in st.session_state:
     st.session_state.modal_ativo = None
 if "etapa_modal_vol" not in st.session_state:
@@ -161,7 +224,7 @@ if "lista_lancamentos" not in st.session_state:
 
 
 # ---------------------------------------------------------
-# MODAL 1: REGISTRO E DIMENSIONAMENTO DO ENSAIO
+# MODAIS
 # ---------------------------------------------------------
 @st.dialog("➕ Registrar Novo Lançamento", width="small")
 def modal_calcular_volume():
@@ -387,13 +450,10 @@ def modal_calcular_volume():
                 st.rerun()
 
 
-# ---------------------------------------------------------
-# MODAL 2: REGISTRO DE RENDIMENTO
-# ---------------------------------------------------------
 @st.dialog("📊 Cálculo de Rendimento", width="medium")
 def modal_calcular_rendimento():
     if not st.session_state.lista_lancamentos:
-        st.warning("Nenhum lançamento encontrado para registrar rendimento.")
+        st.warning("Nenhum lançamento encontrado.")
         return
 
     if st.session_state.etapa_modal_rend == 1:
@@ -507,7 +567,7 @@ def modal_calcular_rendimento():
                 st.rerun()
         with c_save:
             if st.button(
-                "💾 Salvar e Atualizar Dashboard",
+                "💾 Salvar e Atualizar",
                 type="primary",
                 use_container_width=True,
             ):
@@ -520,15 +580,15 @@ def modal_calcular_rendimento():
                 target["status"] = "Finalizado"
                 target["dados_rendimento"] = resultados_finais
 
-                st.session_state.toast_msg = "🎉 Dados gravados com sucesso!"
+                # Limpa cache do gráfico antigo
+                gerar_grafico_rendimento.clear()
+
+                st.session_state.toast_msg = "🎉 Dados gravados!"
                 st.session_state.etapa_modal_rend = 1
                 st.session_state.modal_ativo = None
                 st.rerun()
 
 
-# ---------------------------------------------------------
-# MODAL 3: ESTIMATIVA DE COMPOSIÇÃO ÓTIMA
-# ---------------------------------------------------------
 @st.dialog("🎯 Otimização Estatística", width="medium")
 def modal_estimar_composicao():
     historico = []
@@ -555,7 +615,7 @@ def modal_estimar_composicao():
 
     if len(historico) < 3:
         st.info(
-            "ℹ️ Para rodar a otimização estatística, finalize pelo menos 3 medições de composições no sistema."
+            "ℹ️ Finalize pelo menos 3 medições de composições para realizar a otimização."
         )
         return
 
@@ -588,47 +648,19 @@ def modal_estimar_composicao():
     p1, p2 = int(round(best_prop[0] * 100)), int(round(best_prop[1] * 100))
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Inóculo Recomendado", f"{p1}%")
-    c2.metric("Substrato Recomendado", f"{p2}%")
+    c1.metric("Inóculo", f"{p1}%")
+    c2.metric("Substrato", f"{p2}%")
     c3.metric("Rendimento Est.", f"{best_rend:.1f} mL/g SV")
 
-    # Gráfico do Modelo
-    fig, ax = plt.subplots(figsize=(6, 3))
-    fig.patch.set_facecolor("#18181C")
-    ax.set_facecolor("#18181C")
-
-    ax.plot(cx, cy, color="#818CF8", linewidth=2.5, label="Modelo Smooth")
-    ax.scatter(
-        df["Inoculo"],
-        df["Rendimento"],
-        color="#FACC15",
-        s=40,
-        zorder=5,
-        label="Histórico",
+    # Renderiza o gráfico via Cache
+    fig = gerar_grafico_otimizacao(
+        cx, cy, df["Inoculo"], df["Rendimento"], best_prop[0], p1, p2
     )
-    ax.axvline(
-        x=best_prop[0],
-        color="#4ADE80",
-        linestyle="--",
-        label=f"Ótimo ({p1}:{p2})",
-    )
-
-    ax.set_xlabel("Proporção de Inóculo", color="#A1A1AA", fontsize=9)
-    ax.set_ylabel("Rendimento (mL CH4/g SV)", color="#A1A1AA", fontsize=9)
-    ax.tick_params(colors="#A1A1AA", labelsize=8)
-    ax.grid(True, linestyle=":", alpha=0.15)
-    ax.legend(
-        facecolor="#27272A", edgecolor="none", labelcolor="#E4E4E7", fontsize=8
-    )
-
-    for spine in ax.spines.values():
-        spine.set_color("#27272A")
-
     st.pyplot(fig)
 
 
 # ---------------------------------------------------------
-# DASHBOARD PRINCIPAL
+# DASHBOARD
 # ---------------------------------------------------------
 st.title("👋 Olá, Pesquisador!")
 st.caption("Acompanhamento e otimização dos processos de co-digestão")
@@ -718,7 +750,7 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                     unsafe_allow_html=True,
                 )
                 st.caption(
-                    f"Concentração: **{comp['conc']}** | Total Utilizado: **{comp.get('qtd_total', 'N/A')}**"
+                    f"Concentração: **{comp['conc']}** | Total: **{comp.get('qtd_total', 'N/A')}**"
                 )
 
         with tab2:
@@ -738,57 +770,19 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
         with tab3:
             dados_r = item.get("dados_rendimento")
             if item["tem_grafico"] and dados_r:
-                labels = [d["composicao"] for d in dados_r]
-                rend = [d["rendimento"] for d in dados_r]
-                ch4 = [d["fracao_metano"] for d in dados_r]
+                labels = tuple([d["composicao"] for d in dados_r])
+                rend = tuple([d["rendimento"] for d in dados_r])
+                ch4 = tuple([d["fracao_metano"] for d in dados_r])
 
-                fig, ax1 = plt.subplots(figsize=(6, 2.8))
-                fig.patch.set_facecolor("#18181C")
-                ax1.set_facecolor("#18181C")
-
-                ax1.bar(
-                    labels,
-                    rend,
-                    color="#6366F1",
-                    width=0.35,
-                    alpha=0.85,
-                    label="Rendimento",
-                )
-                ax1.set_ylabel(
-                    "mL CH₄ / g SV", color="#818CF8", fontsize=9, fontweight="bold"
-                )
-                ax1.tick_params(colors="#A1A1AA", labelsize=8)
-
-                ax2 = ax1.twinx()
-                ax2.plot(
-                    labels,
-                    ch4,
-                    color="#FACC15",
-                    marker="o",
-                    linewidth=2,
-                    label="% CH₄",
-                )
-                ax2.set_ylabel(
-                    "% CH₄ no Biogás",
-                    color="#FACC15",
-                    fontsize=9,
-                    fontweight="bold",
-                )
-                ax2.tick_params(colors="#A1A1AA", labelsize=8)
-                ax2.set_ylim(0, 100)
-
-                for spine in ax1.spines.values():
-                    spine.set_color("#27272A")
-                for spine in ax2.spines.values():
-                    spine.set_color("#27272A")
-
+                # Chama a função em cache rápida
+                fig = gerar_grafico_rendimento(labels, rend, ch4)
                 st.pyplot(fig)
             else:
                 st.info(
-                    "ℹ️ Medições ainda não adicionadas. Clique em **'📊 Calcular rendimento'** no topo para registrar os dados das réplicas."
+                    "ℹ️ Medições não adicionadas. Clique em **'📊 Calcular rendimento'** no topo para registrar as réplicas."
                 )
 
-# Autoscroll para novos lançamentos
+# Autoscroll inteligente
 if st.session_state.scroll_to_novo:
     st.session_state.scroll_to_novo = False
     components.html(
@@ -797,7 +791,7 @@ if st.session_state.scroll_to_novo:
             setTimeout(function() {
                 var el = window.parent.document.getElementById('novo-lancamento-anchor');
                 if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-            }, 300);
+            }, 200);
         </script>
         """,
         height=0,

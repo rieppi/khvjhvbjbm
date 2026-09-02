@@ -6,18 +6,18 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-# Importações para a geração de PDF (ReportLab)
+# Importações da biblioteca ReportLab para geração de PDF
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-# Configuração inicial
+# Configuração inicial do Streamlit
 st.set_page_config(
     page_title="Co-digestão Anaeróbia", page_icon="🧪", layout="wide"
 )
 
-# Style CSS Otimizado
+# Estilização CSS
 st.markdown(
     """
 <style>
@@ -50,10 +50,10 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# FUNÇÕES AUXILIARES DE GERAÇÃO DE PDF
+# FUNÇÕES DE GERAÇÃO DE PDF (REPORTLAB)
 # ---------------------------------------------------------
 def gerar_pdf_popup_calculos(dados_popup):
-    """Gera o PDF com o resumo dos cálculos iniciais no pop-up."""
+    """Gera PDF com o resumo dos cálculos iniciais."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     story = []
@@ -61,15 +61,14 @@ def gerar_pdf_popup_calculos(dados_popup):
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, leading=20, textColor=colors.HexColor('#4F46E5'))
     sub_style = ParagraphStyle('Sub', parent=styles['Heading2'], fontSize=12, leading=16, textColor=colors.HexColor('#27272A'))
-    body_bold = ParagraphStyle('BodyB', parent=styles['Normal'], fontSize=9, leading=12, fontName='Helvetica-Bold')
     body_style = ParagraphStyle('BodyN', parent=styles['Normal'], fontSize=9, leading=12)
 
-    # Título do Relatório
+    # Cabeçalho
     story.append(Paragraph(f"<b>Relatório de Lançamento: {dados_popup.get('titulo', '')}</b>", title_style))
     story.append(Paragraph(f"Período: {dados_popup.get('data_str', '')}", body_style))
     story.append(Spacer(1, 15))
 
-    # Tabela 1: Totais Gerais por Composto
+    # Tabela 1: Totais Gerais
     story.append(Paragraph("<b>1. Volume / Massa Total dos Compostos (Todas Réplicas)</b>", sub_style))
     story.append(Spacer(1, 6))
     
@@ -89,13 +88,13 @@ def gerar_pdf_popup_calculos(dados_popup):
     story.append(t_totais)
     story.append(Spacer(1, 15))
 
-    # Tabela 2: Condições dos Reatores
+    # Tabela 2: Condições
     story.append(Paragraph("<b>2. Detalhamento por Condição (Quantidades e Correção de pH)</b>", sub_style))
     story.append(Spacer(1, 6))
 
     data_cond = [["Razão (I:S)", "Headspace", "Vol. Útil", "Réplicas", "Reagentes / Reator", "pH Médio", "NaHCO3 Médio"]]
     for c in dados_popup.get("detalhes_condicoes", []):
-        reag_str = "\n".join([f"• {r.get('nome')}: {r.get('qtd')}" for r in c.get("reagentes", [])])
+        reag_str = "<br/>".join([f"• {r.get('nome')}: {r.get('qtd')}" for r in c.get("reagentes", [])])
         bic_g = c.get("nahco3_medio_g", 0.0)
         bic_str = f"{bic_g*1000:.1f} mg" if bic_g > 0 else "0.0 mg"
 
@@ -104,7 +103,7 @@ def gerar_pdf_popup_calculos(dados_popup):
             f"{c.get('headspace')}%",
             f"{c.get('vol_util_ml')} mL",
             str(c.get("replicas")),
-            Paragraph(reag_str.replace("\n", "<br/>"), body_style),
+            Paragraph(reag_str, body_style),
             f"{c.get('ph_medio', 0.0):.2f}",
             bic_str
         ])
@@ -127,7 +126,7 @@ def gerar_pdf_popup_calculos(dados_popup):
 
 
 def gerar_pdf_relatorio_finalizado(item):
-    """Gera o PDF completo de um lançamento finalizado com resultados de rendimento."""
+    """Gera PDF completo do lançamento finalizado com os dados de rendimento."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     story = []
@@ -159,7 +158,7 @@ def gerar_pdf_relatorio_finalizado(item):
     story.append(t_comp)
     story.append(Spacer(1, 15))
 
-    # Tabela Rendimento Final
+    # Tabela Rendimento
     story.append(Paragraph("<b>2. Resultados de Rendimento e Produção de Biogás</b>", sub_style))
     story.append(Spacer(1, 6))
     
@@ -195,7 +194,7 @@ def calcular_bicarbonato(ph_atual, ph_alvo, vol_util_ml):
         return 0.0
 
     delta_ph = ph_alvo - ph_atual
-    beta = 0.02  # mol H+ / L / unidade de pH
+    beta = 0.02
     vol_litros = vol_util_ml / 1000.0
 
     moles_nahco3 = beta * delta_ph * vol_litros
@@ -319,7 +318,7 @@ def gerar_excel_quantidades(condicoes, compostos):
     return df.to_csv(index=False, sep=";").encode("utf-8-sig")
 
 
-# Inicialização de Estado
+# Inicialização de Variáveis de Estado
 if "modal_ativo" not in st.session_state:
     st.session_state.modal_ativo = None
 if "etapa_modal_vol" not in st.session_state:
@@ -415,7 +414,7 @@ if "lista_lancamentos" not in st.session_state:
 
 
 # ---------------------------------------------------------
-# MODAIS
+# DIÁLOGOS E MODAIS
 # ---------------------------------------------------------
 @st.dialog("📋 Resumo do Lançamento e Correção de pH", width="medium")
 def modal_resumo_popup():
@@ -460,7 +459,7 @@ def modal_resumo_popup():
 
     st.divider()
     
-    # Gerar e permitir o download do PDF dos cálculos iniciais
+    # Download do PDF do Pop-up (Cálculos)
     pdf_bytes = gerar_pdf_popup_calculos(dados)
     
     col_pdf, col_sair = st.columns([1, 1])
@@ -563,11 +562,7 @@ def modal_calcular_volume():
     elif st.session_state.etapa_modal_vol == 3:
         st.subheader("3. Condições dos Reatores")
 
-        st.checkbox(
-            "Fazer correção de pH no meio",
-            value=True,
-            key="cb_corrigir_ph",
-        )
+        st.checkbox("Fazer correção de pH no meio", value=True, key="cb_corrigir_ph")
 
         usar_mesmo_hs = st.checkbox(
             "Usar o mesmo Headspace para todas as condições",
@@ -651,7 +646,7 @@ def modal_calcular_volume():
 
     elif st.session_state.etapa_modal_vol == 4:
         st.subheader("4. pH Inicial das Réplicas")
-        st.caption("Insira o pH inicial individual das réplicas para calcular as médias de pH e Bicarbonato de Sódio (NaHCO₃):")
+        st.caption("Insira o pH inicial individual das réplicas para calcular as médias:")
 
         vol_frasco = 250.0
 
@@ -700,11 +695,7 @@ def modal_calcular_volume():
                 st.rerun()
 
         with col_finish:
-            if st.button(
-                "🚀 Finalizar e Calcular",
-                type="primary",
-                use_container_width=True,
-            ):
+            if st.button("🚀 Finalizar e Calcular", type="primary", use_container_width=True):
                 vol_frasco = 250.0
                 qtd_compostos = len(st.session_state.compostos)
                 
@@ -737,10 +728,7 @@ def modal_calcular_volume():
                             massa_sv = qtd_por_reator * (val_conc / 100.0)
 
                         massa_sv_cond += massa_sv
-                        reagentes_cond.append({
-                            "nome": c["nome"],
-                            "qtd": qtd_str,
-                        })
+                        reagentes_cond.append({"nome": c["nome"], "qtd": qtd_str})
 
                         totais_por_composto[c["nome"]]["qtd"] += (qtd_por_reator * num_rep)
 
@@ -834,13 +822,9 @@ def modal_calcular_rendimento():
         return
 
     if st.session_state.etapa_modal_rend == 1:
-        titulos = [
-            item["titulo"] for item in st.session_state.lista_lancamentos
-        ]
+        titulos = [item["titulo"] for item in st.session_state.lista_lancamentos]
         escolha = st.selectbox("Selecione o Lançamento:", titulos)
-        lanc = next(
-            i for i in st.session_state.lista_lancamentos if i["titulo"] == escolha
-        )
+        lanc = next(i for i in st.session_state.lista_lancamentos if i["titulo"] == escolha)
 
         st.divider()
         dados_replicas_temp = []
@@ -852,9 +836,7 @@ def modal_calcular_rendimento():
 
             with st.container(border=True):
                 st.markdown(f"### 🧪 Razão `(I:S) {prop}`")
-                st.caption(
-                    f"Headspace: {comp.get('headspace', 30.0)}% | Réplicas: {num_replicas}"
-                )
+                st.caption(f"Headspace: {comp.get('headspace', 30.0)}% | Réplicas: {num_replicas}")
                 replicas_comp = []
 
                 for rep in range(1, num_replicas + 1):
@@ -862,44 +844,33 @@ def modal_calcular_rendimento():
                     c1, c2 = st.columns(2)
                     metano_pct = c1.number_input(
                         "Metano (% CH₄)",
-                        0.0,
-                        100.0,
-                        60.0,
-                        step=0.5,
+                        0.0, 100.0, 60.0, step=0.5,
                         key=f"rep_pct_{escolha}_{idx_comp}_{rep}",
                     )
                     vol_biogas = c2.number_input(
                         "Biogás Total (mL)",
-                        0.0,
-                        value=350.0,
-                        step=10.0,
+                        0.0, value=350.0, step=10.0,
                         key=f"rep_vol_{escolha}_{idx_comp}_{rep}",
                     )
 
                     vol_ch4 = vol_biogas * (metano_pct / 100.0)
                     rend_esp = vol_ch4 / massa_sv if massa_sv > 0 else 0.0
-                    replicas_comp.append(
-                        {
-                            "replica": rep,
-                            "metano_pct": metano_pct,
-                            "vol_biogas": vol_biogas,
-                            "vol_ch4": vol_ch4,
-                            "rendimento": rend_esp,
-                        }
-                    )
+                    replicas_comp.append({
+                        "replica": rep,
+                        "metano_pct": metano_pct,
+                        "vol_biogas": vol_biogas,
+                        "vol_ch4": vol_ch4,
+                        "rendimento": rend_esp,
+                    })
 
-                dados_replicas_temp.append(
-                    {
-                        "proporcao": prop,
-                        "massa_sv": massa_sv,
-                        "replicas": replicas_comp,
-                    }
-                )
+                dados_replicas_temp.append({
+                    "proporcao": prop,
+                    "massa_sv": massa_sv,
+                    "replicas": replicas_comp,
+                })
 
         st.divider()
-        if st.button(
-            "Calcular Médias ➔", type="primary", use_container_width=True
-        ):
+        if st.button("Calcular Médias ➔", type="primary", use_container_width=True):
             st.session_state.temp_rend_data = {
                 "titulo": escolha,
                 "composicoes": dados_replicas_temp,
@@ -925,15 +896,13 @@ def modal_calcular_rendimento():
                 m2.metric("Média Biogás", f"{media_vol_biogas:.1f} mL")
                 m3.metric("Rendimento", f"{media_rendimento:.1f} mL/g SV")
 
-            resultados_finais.append(
-                {
-                    "composicao": comp["proporcao"],
-                    "fracao_metano": media_metano,
-                    "vol_biogas": media_vol_biogas,
-                    "vol_ch4": media_vol_biogas * (media_metano / 100.0),
-                    "rendimento": media_rendimento,
-                }
-            )
+            resultados_finais.append({
+                "composicao": comp["proporcao"],
+                "fracao_metano": media_metano,
+                "vol_biogas": media_vol_biogas,
+                "vol_ch4": media_vol_biogas * (media_metano / 100.0),
+                "rendimento": media_rendimento,
+            })
 
         st.divider()
         c_back, c_save = st.columns(2)
@@ -942,16 +911,8 @@ def modal_calcular_rendimento():
                 st.session_state.etapa_modal_rend = 1
                 st.rerun()
         with c_save:
-            if st.button(
-                "💾 Salvar e Atualizar",
-                type="primary",
-                use_container_width=True,
-            ):
-                target = next(
-                    i
-                    for i in st.session_state.lista_lancamentos
-                    if i["titulo"] == temp_data["titulo"]
-                )
+            if st.button("💾 Salvar e Atualizar", type="primary", use_container_width=True):
+                target = next(i for i in st.session_state.lista_lancamentos if i["titulo"] == temp_data["titulo"])
                 target["tem_grafico"] = True
                 target["status"] = "Finalizado"
                 target["dados_rendimento"] = resultados_finais
@@ -971,38 +932,28 @@ def modal_estimar_composicao():
         if l["status"] == "Finalizado" and l.get("dados_rendimento"):
             for d in l["dados_rendimento"]:
                 try:
-                    p = [
-                        float(x)
-                        for x in d["composicao"].split(":")
-                        if x.strip()
-                    ]
+                    p = [float(x) for x in d["composicao"].split(":") if x.strip()]
                     if len(p) >= 2:
                         tot = sum(p)
-                        historico.append(
-                            {
-                                "Inoculo": p[0] / tot,
-                                "Substrato": p[1] / tot,
-                                "Rendimento": d["rendimento"],
-                            }
-                        )
+                        historico.append({
+                            "Inoculo": p[0] / tot,
+                            "Substrato": p[1] / tot,
+                            "Rendimento": d["rendimento"],
+                        })
                 except Exception:
                     continue
 
     if len(historico) < 3:
-        st.info(
-            "ℹ️ Finalize pelo menos 3 medições de composições para realizar a otimização."
-        )
+        st.info("ℹ️ Finalize pelo menos 3 medições de composições para realizar a otimização.")
         return
 
     df = pd.DataFrame(historico)
-    X = np.column_stack(
-        [
-            np.ones(len(df)),
-            df["Inoculo"],
-            df["Substrato"],
-            df["Inoculo"] * df["Substrato"],
-        ]
-    )
+    X = np.column_stack([
+        np.ones(len(df)),
+        df["Inoculo"],
+        df["Substrato"],
+        df["Inoculo"] * df["Substrato"],
+    ])
     y = df["Rendimento"].values
     coef, _, _, _ = np.linalg.lstsq(X, y, rcond=None)
 
@@ -1027,14 +978,12 @@ def modal_estimar_composicao():
     c2.metric("Substrato", f"{p2}%")
     c3.metric("Rendimento Est.", f"{best_rend:.1f} mL/g SV")
 
-    fig = gerar_grafico_otimizacao(
-        cx, cy, df["Inoculo"], df["Rendimento"], best_prop[0], p1, p2
-    )
+    fig = gerar_grafico_otimizacao(cx, cy, df["Inoculo"], df["Rendimento"], best_prop[0], p1, p2)
     st.pyplot(fig)
 
 
 # ---------------------------------------------------------
-# DASHBOARD PRINCIPAL
+# INTERFACE PRINCIPAL
 # ---------------------------------------------------------
 st.title("👋 Olá, Pesquisador!")
 st.caption("Acompanhamento e otimização dos processos de co-digestão")
@@ -1047,29 +996,21 @@ st.write("")
 col_b1, col_b2, col_b3 = st.columns(3)
 
 with col_b1:
-    if st.button(
-        "➕ Registrar lançamento", type="primary", use_container_width=True
-    ):
+    if st.button("➕ Registrar lançamento", type="primary", use_container_width=True):
         st.session_state.etapa_modal_vol = 1
         st.session_state.modal_ativo = "volume"
-    st.caption(
-        "Registre e calcule automaticamente o volume ou massa dos compostos e o bicarbonato"
-    )
+    st.caption("Registre e calcule automaticamente o volume ou massa dos compostos e o bicarbonato")
 
 with col_b2:
     if st.button("📊 Calcular rendimento", use_container_width=True):
         st.session_state.etapa_modal_rend = 1
         st.session_state.modal_ativo = "rendimento"
-    st.caption(
-        "Insira os dados medidos nas réplicas para obter médias e gráficos de rendimento"
-    )
+    st.caption("Insira os dados medidos nas réplicas para obter médias e gráficos de rendimento")
 
 with col_b3:
     if st.button("🎯 Estimar melhor composição", use_container_width=True):
         st.session_state.modal_ativo = "otimizacao"
-    st.caption(
-        "Analise o histórico e encontre a proporção ideal entre os compostos"
-    )
+    st.caption("Analise o histórico e encontre a proporção ideal entre os compostos")
 
 # Controle de Exibição dos Modais
 if st.session_state.modal_ativo == "volume":
@@ -1086,9 +1027,7 @@ st.subheader("📁 Meus Lançamentos")
 
 for idx, item in enumerate(st.session_state.lista_lancamentos):
     if idx == 0:
-        st.markdown(
-            '<div id="novo-lancamento-anchor"></div>', unsafe_allow_html=True
-        )
+        st.markdown('<div id="novo-lancamento-anchor"></div>', unsafe_allow_html=True)
 
     with st.expander(f"{item['titulo']}", expanded=(idx == 0)):
         badge = (
@@ -1099,19 +1038,14 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
 
         c_head1, c_head2 = st.columns([3, 1])
         c_head1.caption(f"📅 {item['data_str']}")
-        c_head2.markdown(
-            f"<div style='text-align:right;'>{badge}</div>",
-            unsafe_allow_html=True,
-        )
+        c_head2.markdown(f"<div style='text-align:right;'>{badge}</div>", unsafe_allow_html=True)
 
         st.write("")
-        tab1, tab2, tab3 = st.tabs(
-            [
-                "🧪 1. Caracterização",
-                "📊 2. Composições e Carga",
-                "📈 3. Rendimento",
-            ]
-        )
+        tab1, tab2, tab3 = st.tabs([
+            "🧪 1. Caracterização",
+            "📊 2. Composições e Carga",
+            "📈 3. Rendimento",
+        ])
 
         with tab1:
             st.markdown("**Compostos Envolvidos e Quantidades Totais Necessárias:**")
@@ -1164,9 +1098,7 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                     use_container_width=True,
                 )
             else:
-                st.info(
-                    "ℹ️ Medições não adicionadas. Clique em **'📊 Calcular rendimento'** no topo para registrar as réplicas."
-                )
+                st.info("ℹ️ Medições não adicionadas. Clique em **'📊 Calcular rendimento'** no topo para registrar as réplicas.")
 
 # Autoscroll
 if st.session_state.scroll_to_novo:

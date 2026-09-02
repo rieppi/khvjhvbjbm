@@ -43,7 +43,7 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# FUNÇÕES COM CACHE DE ALTA PERFORMANCE (Evita Re-renderização)
+# FUNÇÕES COM CACHE DE ALTA PERFORMANCE
 # ---------------------------------------------------------
 @st.cache_data(show_spinner=False)
 def gerar_grafico_rendimento(labels, rend, ch4):
@@ -79,7 +79,7 @@ def gerar_grafico_rendimento(labels, rend, ch4):
     for spine in ax2.spines.values():
         spine.set_color("#27272A")
 
-    plt.close(fig)  # Libera memória RAM imediatamente
+    plt.close(fig)
     return fig
 
 
@@ -118,7 +118,7 @@ def gerar_grafico_otimizacao(curva_x, curva_y, df_inoc, df_rend, p_otima, p1, p2
     for spine in ax.spines.values():
         spine.set_color("#27272A")
 
-    plt.close(fig)  # Libera memória RAM
+    plt.close(fig)
     return fig
 
 
@@ -580,7 +580,6 @@ def modal_calcular_rendimento():
                 target["status"] = "Finalizado"
                 target["dados_rendimento"] = resultados_finais
 
-                # Limpa cache do gráfico antigo
                 gerar_grafico_rendimento.clear()
 
                 st.session_state.toast_msg = "🎉 Dados gravados!"
@@ -652,7 +651,6 @@ def modal_estimar_composicao():
     c2.metric("Substrato", f"{p2}%")
     c3.metric("Rendimento Est.", f"{best_rend:.1f} mL/g SV")
 
-    # Renderiza o gráfico via Cache
     fig = gerar_grafico_otimizacao(
         cx, cy, df["Inoculo"], df["Rendimento"], best_prop[0], p1, p2
     )
@@ -738,11 +736,6 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
         )
 
         with tab1:
-            m1, m2 = st.columns(2)
-            m1.metric("Massa SV Total", item["massa_sv_total"])
-            m2.metric("Carga Volumétrica", item["carga_volumetrica"])
-            st.divider()
-
             st.markdown("**Compostos Envolvidos:**")
             for comp in item["compostos"]:
                 st.markdown(
@@ -750,7 +743,7 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                     unsafe_allow_html=True,
                 )
                 st.caption(
-                    f"Concentração: **{comp['conc']}** | Total: **{comp.get('qtd_total', 'N/A')}**"
+                    f"Concentração: **{comp['conc']}** | Total utilizado: **{comp.get('qtd_total', 'N/A')}**"
                 )
 
         with tab2:
@@ -774,7 +767,6 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                 rend = tuple([d["rendimento"] for d in dados_r])
                 ch4 = tuple([d["fracao_metano"] for d in dados_r])
 
-                # Chama a função em cache rápida
                 fig = gerar_grafico_rendimento(labels, rend, ch4)
                 st.pyplot(fig)
             else:

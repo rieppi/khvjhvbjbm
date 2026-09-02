@@ -17,36 +17,70 @@ st.set_page_config(
     page_title="Co-digestão Anaeróbia", page_icon="🧪", layout="wide"
 )
 
-# Estilização CSS
-st.markdown(
+# Inicialização de estado do Tema (Dark vs Light)
+if "theme_mode" not in st.session_state:
+    st.session_state.theme_mode = "Dark"
+
+# ---------------------------------------------------------
+# ESTILIZAÇÃO CSS (SUPORTE A TEMA ESCURO E CLARO)
+# ---------------------------------------------------------
+if st.session_state.theme_mode == "Dark":
+    css_theme = """
+    <style>
+        .stApp { background-color: #0F0F11; color: #E4E4E7; }
+        .badge-status-green {
+            background-color: rgba(34, 197, 94, 0.15); color: #4ADE80;
+            border: 1px solid rgba(74, 222, 128, 0.3);
+            padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block;
+        }
+        .badge-status-yellow {
+            background-color: rgba(234, 179, 8, 0.15); color: #FACC15;
+            border: 1px solid rgba(250, 204, 21, 0.3);
+            padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block;
+        }
+        .pill-tag {
+            background-color: #1E1E24; color: #818CF8; border: 1px solid rgba(129, 140, 248, 0.2);
+            padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600; display: inline-block; margin-bottom: 6px;
+        }
+        div[data-testid="stExpander"] {
+            background-color: #18181C !important; border: 1px solid #27272A !important;
+            border-radius: 12px !important; margin-bottom: 16px !important;
+        }
+        button[kind="primary"] {
+            background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%) !important; border: none !important; font-weight: 600 !important; color: white !important;
+        }
+    </style>
     """
-<style>
-    .stApp { background-color: #0F0F11; color: #E4E4E7; }
-    .badge-status-green {
-        background-color: rgba(34, 197, 94, 0.15); color: #4ADE80;
-        border: 1px solid rgba(74, 222, 128, 0.3);
-        padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block;
-    }
-    .badge-status-yellow {
-        background-color: rgba(234, 179, 8, 0.15); color: #FACC15;
-        border: 1px solid rgba(250, 204, 21, 0.3);
-        padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block;
-    }
-    .pill-tag {
-        background-color: #1E1E24; color: #818CF8; border: 1px solid rgba(129, 140, 248, 0.2);
-        padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600; display: inline-block; margin-bottom: 6px;
-    }
-    div[data-testid="stExpander"] {
-        background-color: #18181C !important; border: 1px solid #27272A !important;
-        border-radius: 12px !important; margin-bottom: 16px !important;
-    }
-    button[kind="primary"] {
-        background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%) !important; border: none !important; font-weight: 600 !important;
-    }
-</style>
-""",
-    unsafe_allow_html=True,
-)
+else:
+    css_theme = """
+    <style>
+        .stApp { background-color: #F8FAFC; color: #0F172A; }
+        .badge-status-green {
+            background-color: #DCFCE7; color: #15803D;
+            border: 1px solid #86EFAC;
+            padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block;
+        }
+        .badge-status-yellow {
+            background-color: #FEF9C3; color: #A16207;
+            border: 1px solid #FDE047;
+            padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block;
+        }
+        .pill-tag {
+            background-color: #EEF2FF; color: #4338CA; border: 1px solid #C7D2FE;
+            padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600; display: inline-block; margin-bottom: 6px;
+        }
+        div[data-testid="stExpander"] {
+            background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
+            border-radius: 12px !important; margin-bottom: 16px !important;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+        }
+        button[kind="primary"] {
+            background: linear-gradient(135deg, #4F46E5 0%, #4338CA 100%) !important; border: none !important; font-weight: 600 !important; color: white !important;
+        }
+    </style>
+    """
+
+st.markdown(css_theme, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------
@@ -63,12 +97,10 @@ def gerar_pdf_popup_calculos(dados_popup):
     sub_style = ParagraphStyle('Sub', parent=styles['Heading2'], fontSize=12, leading=16, textColor=colors.HexColor('#27272A'))
     body_style = ParagraphStyle('BodyN', parent=styles['Normal'], fontSize=9, leading=12)
 
-    # Cabeçalho
     story.append(Paragraph(f"<b>Relatório de Lançamento: {dados_popup.get('titulo', '')}</b>", title_style))
     story.append(Paragraph(f"Período: {dados_popup.get('data_str', '')}", body_style))
     story.append(Spacer(1, 15))
 
-    # Tabela 1: Totais Gerais
     story.append(Paragraph("<b>1. Volume / Massa Total dos Compostos (Todas Réplicas)</b>", sub_style))
     story.append(Spacer(1, 6))
     
@@ -88,7 +120,6 @@ def gerar_pdf_popup_calculos(dados_popup):
     story.append(t_totais)
     story.append(Spacer(1, 15))
 
-    # Tabela 2: Condições
     story.append(Paragraph("<b>2. Detalhamento por Condição (Quantidades e Correção de pH)</b>", sub_style))
     story.append(Spacer(1, 6))
 
@@ -136,12 +167,10 @@ def gerar_pdf_relatorio_finalizado(item):
     sub_style = ParagraphStyle('Sub', parent=styles['Heading2'], fontSize=12, leading=16, textColor=colors.HexColor('#334155'))
     body_style = ParagraphStyle('BodyN', parent=styles['Normal'], fontSize=9, leading=12)
 
-    # Título
     story.append(Paragraph(f"<b>Relatório Completo de Lançamento: {item.get('titulo', '')}</b>", title_style))
     story.append(Paragraph(f"Status: <b>{item.get('status', '')}</b> | Detalhes: {item.get('data_str', '')}", body_style))
     story.append(Spacer(1, 15))
 
-    # Tabela 1: Caracterização dos Compostos
     story.append(Paragraph("<b>1. Caracterização dos Compostos e Consumo Total</b>", sub_style))
     story.append(Spacer(1, 6))
     data_comp = [["Composto", "Concentração SV", "Total Necessário no Ensaio"]]
@@ -159,7 +188,6 @@ def gerar_pdf_relatorio_finalizado(item):
     story.append(t_comp)
     story.append(Spacer(1, 15))
 
-    # Tabela 2: Composições e Condições
     story.append(Paragraph("<b>2. Composições e Parâmetros Iniciais</b>", sub_style))
     story.append(Spacer(1, 6))
     data_cond = [["Razão (I:S)", "Carga Orgânica", "pH Inicial (Média)", "NaHCO3 Médio"]]
@@ -188,7 +216,6 @@ def gerar_pdf_relatorio_finalizado(item):
     story.append(t_cond)
     story.append(Spacer(1, 15))
 
-    # Tabela 3: Rendimento de Biogás
     story.append(Paragraph("<b>3. Resultados de Rendimento de Biogás e Metano</b>", sub_style))
     story.append(Spacer(1, 6))
     
@@ -234,76 +261,88 @@ def calcular_bicarbonato(ph_atual, ph_alvo, vol_util_ml):
 
 
 @st.cache_resource(show_spinner=False)
-def gerar_grafico_rendimento(labels, rend, ch4):
+def gerar_grafico_rendimento(labels, rend, ch4, dark_mode=True):
     fig, ax1 = plt.subplots(figsize=(6, 2.8))
-    fig.patch.set_facecolor("#18181C")
-    ax1.set_facecolor("#18181C")
+    
+    bg_color = "#18181C" if dark_mode else "#FFFFFF"
+    text_color = "#A1A1AA" if dark_mode else "#475569"
+    border_color = "#27272A" if dark_mode else "#E2E8F0"
+    
+    fig.patch.set_facecolor(bg_color)
+    ax1.set_facecolor(bg_color)
 
     ax1.bar(
         labels,
         rend,
-        color="#6366F1",
+        color="#6366F1" if dark_mode else "#4F46E5",
         width=0.35,
         alpha=0.85,
         label="Rendimento",
     )
     ax1.set_ylabel(
-        "mL CH₄ / g SV", color="#818CF8", fontsize=9, fontweight="bold"
+        "mL CH₄ / g SV", color="#818CF8" if dark_mode else "#4338CA", fontsize=9, fontweight="bold"
     )
-    ax1.tick_params(colors="#A1A1AA", labelsize=8)
+    ax1.tick_params(colors=text_color, labelsize=8)
 
     ax2 = ax1.twinx()
     ax2.plot(
-        labels, ch4, color="#FACC15", marker="o", linewidth=2, label="% CH₄"
+        labels, ch4, color="#FACC15" if dark_mode else "#D97706", marker="o", linewidth=2, label="% CH₄"
     )
     ax2.set_ylabel(
-        "% CH₄ no Biogás", color="#FACC15", fontsize=9, fontweight="bold"
+        "% CH₄ no Biogás", color="#FACC15" if dark_mode else "#D97706", fontsize=9, fontweight="bold"
     )
-    ax2.tick_params(colors="#A1A1AA", labelsize=8)
+    ax2.tick_params(colors=text_color, labelsize=8)
     ax2.set_ylim(0, 100)
 
     for spine in ax1.spines.values():
-        spine.set_color("#27272A")
+        spine.set_color(border_color)
     for spine in ax2.spines.values():
-        spine.set_color("#27272A")
+        spine.set_color(border_color)
 
     return fig
 
 
 @st.cache_resource(show_spinner=False)
-def gerar_grafico_otimizacao(curva_x, curva_y, df_inoc, df_rend, p_otima, p1, p2):
+def gerar_grafico_otimizacao(curva_x, curva_y, df_inoc, df_rend, p_otima, p1, p2, dark_mode=True):
     fig, ax = plt.subplots(figsize=(6, 3))
-    fig.patch.set_facecolor("#18181C")
-    ax.set_facecolor("#18181C")
+    
+    bg_color = "#18181C" if dark_mode else "#FFFFFF"
+    text_color = "#A1A1AA" if dark_mode else "#475569"
+    border_color = "#27272A" if dark_mode else "#E2E8F0"
+    leg_bg = "#27272A" if dark_mode else "#F1F5F9"
+    leg_text = "#E4E4E7" if dark_mode else "#0F172A"
+
+    fig.patch.set_facecolor(bg_color)
+    ax.set_facecolor(bg_color)
 
     ax.plot(
-        curva_x, curva_y, color="#818CF8", linewidth=2.5, label="Modelo Smooth"
+        curva_x, curva_y, color="#818CF8" if dark_mode else "#4F46E5", linewidth=2.5, label="Modelo Smooth"
     )
     ax.scatter(
         df_inoc,
         df_rend,
-        color="#FACC15",
+        color="#FACC15" if dark_mode else "#D97706",
         s=40,
         zorder=5,
         label="Histórico",
     )
     ax.axvline(
         x=p_otima,
-        color="#4ADE80",
+        color="#4ADE80" if dark_mode else "#16A34A",
         linestyle="--",
         label=f"Ótimo ({p1}:{p2})",
     )
 
-    ax.set_xlabel("Proporção de Inóculo", color="#A1A1AA", fontsize=9)
-    ax.set_ylabel("Rendimento (mL CH4/g SV)", color="#A1A1AA", fontsize=9)
-    ax.tick_params(colors="#A1A1AA", labelsize=8)
+    ax.set_xlabel("Proporção de Inóculo", color=text_color, fontsize=9)
+    ax.set_ylabel("Rendimento (mL CH4/g SV)", color=text_color, fontsize=9)
+    ax.tick_params(colors=text_color, labelsize=8)
     ax.grid(True, linestyle=":", alpha=0.15)
     ax.legend(
-        facecolor="#27272A", edgecolor="none", labelcolor="#E4E4E7", fontsize=8
+        facecolor=leg_bg, edgecolor="none", labelcolor=leg_text, fontsize=8
     )
 
     for spine in ax.spines.values():
-        spine.set_color("#27272A")
+        spine.set_color(border_color)
 
     return fig
 
@@ -490,7 +529,6 @@ def modal_resumo_popup():
 
     st.divider()
     
-    # Download do PDF do Pop-up (Cálculos)
     pdf_bytes = gerar_pdf_popup_calculos(dados)
     
     col_pdf, col_sair = st.columns([1, 1])
@@ -1009,15 +1047,37 @@ def modal_estimar_composicao():
     c2.metric("Substrato", f"{p2}%")
     c3.metric("Rendimento Est.", f"{best_rend:.1f} mL/g SV")
 
-    fig = gerar_grafico_otimizacao(cx, cy, df["Inoculo"], df["Rendimento"], best_prop[0], p1, p2)
+    is_dark = st.session_state.theme_mode == "Dark"
+    fig = gerar_grafico_otimizacao(cx, cy, df["Inoculo"], df["Rendimento"], best_prop[0], p1, p2, dark_mode=is_dark)
     st.pyplot(fig)
 
 
 # ---------------------------------------------------------
 # INTERFACE PRINCIPAL
 # ---------------------------------------------------------
-st.title("👋 Olá, Pesquisador!")
-st.caption("Acompanhamento e otimização dos processos de co-digestão")
+col_header, col_theme = st.columns([4, 1])
+
+with col_header:
+    st.title("👋 Olá, Pesquisador!")
+    st.caption("Acompanhamento e otimização dos processos de co-digestão")
+
+with col_theme:
+    st.write("")
+    st.write("")
+    # Seletor de Tema
+    novo_tema = st.radio(
+        "Tema Visual:",
+        ["Dark 🌙", "Light ☀️"],
+        index=0 if st.session_state.theme_mode == "Dark" else 1,
+        horizontal=True,
+        key="radio_tema"
+    )
+    tema_limpo = "Dark" if "Dark" in novo_tema else "Light"
+    if tema_limpo != st.session_state.theme_mode:
+        st.session_state.theme_mode = tema_limpo
+        gerar_grafico_rendimento.clear()
+        gerar_grafico_otimizacao.clear()
+        st.rerun()
 
 if "toast_msg" in st.session_state and st.session_state.toast_msg:
     st.toast(st.session_state.toast_msg, icon="🎉")
@@ -1115,11 +1175,11 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                 rend = tuple([d["rendimento"] for d in dados_r])
                 ch4 = tuple([d["fracao_metano"] for d in dados_r])
 
-                fig = gerar_grafico_rendimento(labels, rend, ch4)
+                is_dark = st.session_state.theme_mode == "Dark"
+                fig = gerar_grafico_rendimento(labels, rend, ch4, dark_mode=is_dark)
                 st.pyplot(fig)
                 
                 st.divider()
-                # Botão para baixar o PDF do Relatório Completo no Lançamento Finalizado
                 pdf_finalizado_bytes = gerar_pdf_relatorio_finalizado(item)
                 st.download_button(
                     label="📄 Baixar PDF do Relatório Completo",

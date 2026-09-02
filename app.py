@@ -4,50 +4,49 @@ import streamlit as st
 
 st.set_page_config(page_title="Co-digestão Anaeróbia", layout="wide")
 
-# Estilização CSS Dark Theme e Ajustes de Layout
+# Estilização CSS Dark Theme Limpa
 st.markdown(
     """
 <style>
     .stApp { background-color: #121214; color: #E4E4E7; }
-    .card {
-        background-color: #18181B;
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid #27272A;
-        margin-bottom: 10px;
-    }
     .badge-status-green {
         background-color: #14532D; color: #4ADE80;
-        padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;
+        padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: bold;
     }
     .badge-status-yellow {
         background-color: #713F12; color: #FACC15;
-        padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;
+        padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: bold;
     }
     .pill-tag {
         background-color: #2E3856; color: #818CF8;
         padding: 4px 12px; border-radius: 16px; font-size: 12px; font-weight: bold;
-        display: inline-block; margin-bottom: 10px;
+        display: inline-block; margin-bottom: 8px; margin-top: 4px;
     }
     div[data-testid="stExpander"] {
-        background-color: #121214;
+        background-color: #18181B;
         border: 1px solid #27272A;
         border-radius: 8px;
         margin-bottom: 12px;
     }
-    /* Estilo para centralizar os botões de paginação por bolinhas */
-    .stButton>button {
+    /* Estilo exclusivo para os botões de bolinha de paginação */
+    div[data-testid="column"]:has(button[key^="dot_"]) button {
         border-radius: 50% !important;
-        width: 32px !important;
-        height: 32px !important;
+        width: 18px !important;
+        height: 18px !important;
+        min-height: 18px !important;
         padding: 0px !important;
+        font-size: 10px !important;
+        line-height: 1 !important;
+        border: none !important;
+        background-color: transparent !important;
+        box-shadow: none !important;
     }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
-# Inicialização de estados da sessão
+# Inicialização de estados
 if "etapa_modal_vol" not in st.session_state:
     st.session_state.etapa_modal_vol = 1
 if "etapa_modal_rend" not in st.session_state:
@@ -88,8 +87,7 @@ def modal_calcular_volume():
         st.button("➕ Adicionar composto", key="add_comp")
         st.write("---")
 
-        # Paginação por Bolinhas (Centralizada)
-        c_l, c_dot1, c_dot2, c_r = st.columns([4, 1, 1, 4])
+        c_l, c_dot1, c_dot2, c_r = st.columns([6, 1, 1, 6])
         with c_dot1:
             st.button("⚪", key="dot_v1_active", disabled=True)
         with c_dot2:
@@ -118,8 +116,7 @@ def modal_calcular_volume():
 
         st.write("---")
 
-        # Paginação por Bolinhas (Centralizada)
-        c_l, c_dot1, c_dot2, c_r = st.columns([4, 1, 1, 4])
+        c_l, c_dot1, c_dot2, c_r = st.columns([6, 1, 1, 6])
         with c_dot1:
             if st.button("⚫", key="dot_v2_to_1"):
                 st.session_state.etapa_modal_vol = 1
@@ -145,42 +142,37 @@ def modal_calcular_rendimento():
             unsafe_allow_html=True,
         )
 
-        # Campo 1: Fração de Metano
-        st.markdown("**Fração de Metano (%)**")
-        col_m1, col_m2 = st.columns([4, 1])
-        with col_m1:
-            f_metano = st.number_input(
-                "Fração de Metano",
-                value=60.0,
-                step=1.0,
-                label_visibility="collapsed",
-            )
-        with col_m2:
-            st.markdown(
-                "<p style='padding-top:6px; font-weight:bold;'>%</p>",
-                unsafe_allow_html=True,
-            )
+        col_m1, col_m2 = st.columns([3, 1])
+        f_metano = col_m1.number_input(
+            "Fração de Metano",
+            value=60.0,
+            step=1.0,
+            label_visibility="collapsed",
+        )
+        col_m2.text_input(
+            "Unidade Metano",
+            value="%",
+            disabled=True,
+            label_visibility="collapsed",
+        )
 
-        # Campo 2: Volume de Biogás
-        st.markdown("**Volume de Biogás (mL)**")
-        col_v1, col_v2 = st.columns([4, 1])
-        with col_v1:
-            v_biogas = st.number_input(
-                "Volume de Biogás",
-                value=350.0,
-                step=10.0,
-                label_visibility="collapsed",
-            )
-        with col_v2:
-            st.markdown(
-                "<p style='padding-top:6px; font-weight:bold;'>mL</p>",
-                unsafe_allow_html=True,
-            )
+        col_v1, col_v2 = st.columns([3, 1])
+        v_biogas = col_v1.number_input(
+            "Volume de Biogás",
+            value=350.0,
+            step=10.0,
+            label_visibility="collapsed",
+        )
+        col_v2.text_input(
+            "Unidade Biogás",
+            value="mL",
+            disabled=True,
+            label_visibility="collapsed",
+        )
 
         st.write("---")
 
-        # Paginação Centralizada (Pág 1: Ativa ⚪ | Pág 2: Inativa ⚫)
-        c_l, c_dot1, c_dot2, c_r = st.columns([4, 1, 1, 4])
+        c_l, c_dot1, c_dot2, c_r = st.columns([6, 1, 1, 6])
         with c_dot1:
             st.button("⚪", key="dot_r1_active", disabled=True)
         with c_dot2:
@@ -208,8 +200,7 @@ def modal_calcular_rendimento():
 
         st.write("---")
 
-        # Paginação Centralizada (Pág 1: Inativa ⚫ | Pág 2: Ativa ⚪)
-        c_l, c_dot1, c_dot2, c_r = st.columns([4, 1, 1, 4])
+        c_l, c_dot1, c_dot2, c_r = st.columns([6, 1, 1, 6])
         with c_dot1:
             if st.button("⚫", key="dot_r2_to_1"):
                 st.session_state.etapa_modal_rend = 1
@@ -250,7 +241,6 @@ with st.expander("Lançamento 09/06/2023", expanded=True):
 
     g_col1, g_col2 = st.columns(2)
     with g_col1:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.caption("09/06/2023 • 31 dias de digestão")
 
         fig, ax = plt.subplots(figsize=(4, 2.2))
@@ -267,10 +257,8 @@ with st.expander("Lançamento 09/06/2023", expanded=True):
         for spine in ax.spines.values():
             spine.set_color("#27272A")
         st.pyplot(fig)
-        st.markdown("</div>", unsafe_allow_html=True)
 
     with g_col2:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("**Caracterização**")
         st.markdown(
             '<span class="pill-tag">Inóculo 1</span>', unsafe_allow_html=True
@@ -280,7 +268,6 @@ with st.expander("Lançamento 09/06/2023", expanded=True):
             '<span class="pill-tag">Substrato 1</span>', unsafe_allow_html=True
         )
         st.caption("Concentração de sólidos voláteis: 40.0 g/g")
-        st.markdown("</div>", unsafe_allow_html=True)
 
 # Lançamento 2
 with st.expander("Lançamento 16/06/2023", expanded=False):
@@ -292,16 +279,12 @@ with st.expander("Lançamento 16/06/2023", expanded=False):
 
     g_col3, g_col4 = st.columns(2)
     with g_col3:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.caption("16/06/2023 • 31 dias de digestão")
         st.info("Gráfico Indisponível")
-        st.markdown("</div>", unsafe_allow_html=True)
 
     with g_col4:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("**Caracterização**")
         st.markdown(
             '<span class="pill-tag">Inóculo 1</span>', unsafe_allow_html=True
         )
         st.caption("Concentração de sólidos voláteis: 12.0 g/mL")
-        st.markdown("</div>", unsafe_allow_html=True)

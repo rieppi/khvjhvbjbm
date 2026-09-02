@@ -2,7 +2,6 @@ from datetime import date
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LinearRegression
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -570,13 +569,12 @@ def modal_calcular_rendimento():
 
 
 # ---------------------------------------------------------
-# MODAL 3: ESTIMAR MELHOR COMPOSIÇÃO (ANÁLISE ESTATÍSTICA)
+# MODAL 3: ESTIMAR MELHOR COMPOSIÇÃO (SÓ NUMPY/PANDAS)
 # ---------------------------------------------------------
 @st.dialog("🎯 Estimativa Estatística da Melhor Composição", width="medium")
 def modal_estimar_composicao():
     st.markdown("### Análise de Regressão e Otimização")
 
-    # Coleta de histórico dos lançamentos finalizados
     historico_dados = []
     for lanc in st.session_state.lista_lancamentos:
         if lanc["status"] == "Finalizado" and lanc.get("dados_rendimento"):
@@ -608,20 +606,20 @@ def modal_estimar_composicao():
 
     df = pd.DataFrame(historico_dados)
 
-    # Regressão Polinomial de Mistura (Modelagem Simplex)
+    # Regressão por Mínimos Quadrados Nativa do NumPy
     X = np.column_stack(
         [
+            np.ones(len(df)),
             df["Inóculo"],
             df["Substrato"],
-            df["Inóculo"] * df["Substrato"],  # Termo de interação
+            df["Inóculo"] * df["Substrato"],
         ]
     )
     y = df["Rendimento"].values
 
-    model = LinearRegression()
-    model.fit(X, y)
+    coef, residuals, rank, s = np.linalg.lstsq(X, y, rcond=None)
 
-    # Predição da melhor proporção
+    # Varredura para encontrar a melhor proporção no modelo
     grid_inoculo = np.linspace(0.1, 0.9, 100)
     melhor_rend = -1
     melhor_prop = (0.5, 0.5)
@@ -631,8 +629,8 @@ def modal_estimar_composicao():
 
     for inoc in grid_inoculo:
         subst = 1.0 - inoc
-        X_pred = np.array([[inoc, subst, inoc * subst]])
-        rend_pred = model.predict(X_pred)[0]
+        x_row = np.array([1.0, inoc, subst, inoc * subst])
+        rend_pred = np.dot(x_row, coef)
 
         curva_x.append(inoc)
         curva_y.append(rend_pred)
@@ -641,10 +639,13 @@ def modal_estimar_composicao():
             melhor_rend = rend_pred
             melhor_prop = (inoc, subst)
 
-    # R2 Score
-    r2_score = model.score(X, y)
+    # Coeficiente R²
+    y_pred = X @ coef
+    ss_tot = np.sum((y - np.mean(y)) ** 2)
+    ss_res = np.sum((y - y_pred) ** 2)
+    r2_score = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
 
-    st.success(f"✨ **Composição Ideal Estimada:**")
+    st.success("✨ **Composição Ideal Estimada:**")
 
     prop_inoc_pct = int(round(melhor_prop[0] * 100))
     prop_sub_pct = int(round(melhor_prop[1] * 100))
@@ -687,11 +688,11 @@ def modal_estimar_composicao():
     )
 
     ax.set_xlabel("Fração de Inóculo", color="#A1A1AA", fontsize=9)
-    ax.set_ylabel(
-        "Rendimento (mL CH4/g SV)", color="#A1A1AA", fontsize=9
-    )
+    ax.set_ylabel("Rendimento (mL CH4/g SV)", color="#A1A1AA", fontsize=9)
     ax.tick_params(colors="#A1A1AA", labelsize=8)
-    ax.legend(facecolor="#27272A", edgecolor="none", labelcolor="#E4E4E7", fontsize=8)
+    ax.legend(
+        facecolor="#27272A", edgecolor="none", labelcolor="#E4E4E7", fontsize=8
+    )
 
     for spine in ax.spines.values():
         spine.set_color("#27272A")

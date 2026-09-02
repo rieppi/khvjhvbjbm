@@ -43,9 +43,9 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# FUNÇÕES COM CACHE DE ALTA PERFORMANCE
+# FUNÇÕES COM CACHE CORRIGIDO PARA OBJETOS MATPLOTLIB
 # ---------------------------------------------------------
-@st.cache_data(show_spinner=False)
+@st.cache_resource(show_spinner=False)
 def gerar_grafico_rendimento(labels, rend, ch4):
     fig, ax1 = plt.subplots(figsize=(6, 2.8))
     fig.patch.set_facecolor("#18181C")
@@ -79,11 +79,10 @@ def gerar_grafico_rendimento(labels, rend, ch4):
     for spine in ax2.spines.values():
         spine.set_color("#27272A")
 
-    plt.close(fig)
     return fig
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_resource(show_spinner=False)
 def gerar_grafico_otimizacao(curva_x, curva_y, df_inoc, df_rend, p_otima, p1, p2):
     fig, ax = plt.subplots(figsize=(6, 3))
     fig.patch.set_facecolor("#18181C")
@@ -118,7 +117,6 @@ def gerar_grafico_otimizacao(curva_x, curva_y, df_inoc, df_rend, p_otima, p1, p2
     for spine in ax.spines.values():
         spine.set_color("#27272A")
 
-    plt.close(fig)
     return fig
 
 
@@ -171,6 +169,8 @@ if "lista_lancamentos" not in st.session_state:
                 {
                     "proporcao": "2:1",
                     "carga": "0.082 g SV/mL",
+                    "headspace": 30.0,
+                    "replicas": 3,
                     "massa_sv_val": 14.40,
                     "reagentes": [
                         {"nome": "Inóculo 1", "qtd": "120.0 mL"},
@@ -180,6 +180,8 @@ if "lista_lancamentos" not in st.session_state:
                 {
                     "proporcao": "1:1",
                     "carga": "0.082 g SV/mL",
+                    "headspace": 30.0,
+                    "replicas": 3,
                     "massa_sv_val": 14.40,
                     "reagentes": [
                         {"nome": "Inóculo 1", "qtd": "87.5 mL"},
@@ -189,6 +191,8 @@ if "lista_lancamentos" not in st.session_state:
                 {
                     "proporcao": "1:2",
                     "carga": "0.082 g SV/mL",
+                    "headspace": 30.0,
+                    "replicas": 3,
                     "massa_sv_val": 14.40,
                     "reagentes": [
                         {"nome": "Inóculo 1", "qtd": "60.0 mL"},
@@ -267,7 +271,7 @@ def modal_calcular_volume():
                 c1, c2, c3 = st.columns(3)
                 hs = c1.number_input(
                     "Headspace (%)",
-                    value=cond["headspace"],
+                    value=float(cond["headspace"]),
                     step=5.0,
                     key=f"hs_{i}",
                 )
@@ -275,7 +279,7 @@ def modal_calcular_volume():
                     "Razão (I:S)", value=cond["composicao"], key=f"comp_{i}"
                 )
                 rep = c3.number_input(
-                    "Réplicas", value=cond["replicas"], step=1, key=f"rep_{i}"
+                    "Réplicas", value=int(cond["replicas"]), step=1, key=f"rep_{i}"
                 )
 
                 st.session_state.condicoes[i] = {
@@ -315,7 +319,7 @@ def modal_calcular_volume():
                 c_val, c_unit = st.columns([2, 1])
                 novo_val = c_val.number_input(
                     "Concentração SV",
-                    value=comp["valor"],
+                    value=float(comp["valor"]),
                     key=f"val_comp_{i}",
                 )
                 nova_unit = c_unit.selectbox(
@@ -412,6 +416,8 @@ def modal_calcular_volume():
                     {
                         "proporcao": cond["composicao"],
                         "carga": f"{carga_composicao:.3f} g SV/mL",
+                        "headspace": cond["headspace"],
+                        "replicas": cond["replicas"],
                         "massa_sv_val": massa_sv_total,
                         "reagentes": [
                             {"nome": comp["nome"], "qtd": comp["qtd"]}
@@ -466,19 +472,16 @@ def modal_calcular_rendimento():
         )
 
         st.divider()
-        num_replicas = (
-            st.session_state.condicoes[0]["replicas"]
-            if st.session_state.condicoes
-            else 3
-        )
         dados_replicas_temp = []
 
         for idx_comp, comp in enumerate(lanc.get("composicoes_estudadas", [])):
             prop = comp["proporcao"]
             massa_sv = comp.get("massa_sv_val", 1.0)
+            num_replicas = int(comp.get("replicas", 3))
 
             with st.container(border=True):
                 st.markdown(f"### 🧪 Razão `(I:S) {prop}`")
+                st.caption(f"Headspace: {comp.get('headspace', 30.0)}% | Réplicas: {num_replicas}")
                 replicas_comp = []
 
                 for rep in range(1, num_replicas + 1):
@@ -747,14 +750,16 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                 )
 
         with tab2:
-            st.markdown("**Composições e Reagentes por Reator:**")
+            st.markdown("**Composições e Parâmetros dos Reatores:**")
             for comp_est in item.get("composicoes_estudadas", []):
                 with st.container(border=True):
-                    c_prop, c_carga = st.columns(2)
+                    c_prop, c_carga, c_hs, c_rep = st.columns(4)
                     c_prop.markdown(
-                        f"**Proporção (I:S):** `{comp_est['proporcao']}`"
+                        f"**Razão (I:S):** `{comp_est['proporcao']}`"
                     )
                     c_carga.markdown(f"**Carga Orgânica:** `{comp_est['carga']}`")
+                    c_hs.markdown(f"**Headspace:** `{comp_est.get('headspace', 'N/A')}%`")
+                    c_rep.markdown(f"**Réplicas:** `{comp_est.get('replicas', 'N/A')}`")
 
                     st.caption("**Quantidades por Reator:**")
                     for r in comp_est["reagentes"]:

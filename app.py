@@ -63,44 +63,31 @@ if "lista_lancamentos" not in st.session_state:
     st.session_state.lista_lancamentos = [
         {
             "id": "l_1",
-            "titulo": "Lançamento 09/06/2023",
-            "status": "Finalizado",
-            "data_str": "09/06/2023 • 31 dias de digestão",
-            "tem_grafico": True,
-            "massa_sv_total": "18.5 g SV",
-            "carga_volumetrica": "0.105 g SV/mL",
-            "compostos": [
-                {
-                    "nome": "Inóculo 1",
-                    "conc": "15.0 g/mL",
-                    "qtd": "150.0 mL",
-                    "massa_sv": "12.0 g SV",
-                },
-                {
-                    "nome": "Substrato 1",
-                    "conc": "40.0 g/g",
-                    "qtd": "50.0 g",
-                    "massa_sv": "6.5 g SV",
-                },
-            ],
-        },
-        {
-            "id": "l_2",
             "titulo": "Lançamento 16/06/2023",
             "status": "Em andamento",
             "data_str": "16/06/2023 • 31 dias de digestão",
             "tem_grafico": False,
-            "massa_sv_total": "14.4 g SV",
+            "massa_sv_total": "14.40 g SV",
             "carga_volumetrica": "0.082 g SV/mL",
             "compostos": [
                 {
                     "nome": "Inóculo 1",
                     "conc": "12.0 g/mL",
                     "qtd": "120.0 mL",
-                    "massa_sv": "14.4 g SV",
+                    "massa_sv": "14.40 g SV",
                 }
             ],
-        },
+            "composicoes_estudadas": [
+                {
+                    "proporcao": "2:1",
+                    "carga": "0.082 g SV/mL",
+                    "reagentes": [
+                        {"nome": "Inóculo 1", "qtd": "120.0 mL"},
+                        {"nome": "Substrato 1", "qtd": "40.0 g"},
+                    ],
+                }
+            ],
+        }
     ]
 
 
@@ -245,15 +232,13 @@ def modal_calcular_volume():
         if col_finish.button(
             "🚀 Finalizar e Calcular", type="primary", key="btn_vol_finish"
         ):
-            vol_frasco = 250.0  # Volume total do reator (mL)
+            vol_frasco = 250.0
             hs_medio = (
                 st.session_state.condicoes[0]["headspace"]
                 if st.session_state.condicoes
                 else 30.0
             )
-            vol_util = vol_frasco * (
-                1 - (hs_medio / 100.0)
-            )  # Volume útil real
+            vol_util = vol_frasco * (1 - (hs_medio / 100.0))
 
             compostos_calculados = []
             qtd_compostos = len(st.session_state.compostos)
@@ -285,10 +270,24 @@ def modal_calcular_volume():
                     }
                 )
 
-            # Cálculo da Carga da composição (g SV / mL útil)
             carga_composicao = (
                 massa_sv_total / vol_util if vol_util > 0 else 0.0
             )
+
+            # Montagem das composições para a aba 2 do carrossel
+            composicoes_estudadas = []
+            for cond in st.session_state.condicoes:
+                reagentes_cond = [
+                    {"nome": comp["nome"], "qtd": comp["qtd"]}
+                    for comp in compostos_calculados
+                ]
+                composicoes_estudadas.append(
+                    {
+                        "proporcao": cond["composicao"],
+                        "carga": f"{carga_composicao:.3f} g SV/mL",
+                        "reagentes": reagentes_cond,
+                    }
+                )
 
             novo_id = f"lanc_{len(st.session_state.lista_lancamentos) + 1}"
             novo_item = {
@@ -300,6 +299,7 @@ def modal_calcular_volume():
                 "massa_sv_total": f"{massa_sv_total:.2f} g SV",
                 "carga_volumetrica": f"{carga_composicao:.3f} g SV/mL",
                 "compostos": compostos_calculados,
+                "composicoes_estudadas": composicoes_estudadas,
             }
 
             st.session_state.lista_lancamentos.insert(0, novo_item)
@@ -426,7 +426,7 @@ if st.session_state.abrir_modal_rend:
 st.write("---")
 st.subheader("Meus lançamentos")
 
-# Renderização dos Lançamentos com Massa de SV e Carga da Composição
+# Renderização dos Lançamentos em Carrossel/Abas
 for idx, item in enumerate(st.session_state.lista_lancamentos):
     if idx == 0:
         st.markdown(
@@ -445,13 +445,66 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                 unsafe_allow_html=True,
             )
 
+        st.caption(item["data_str"])
         st.write("")
-        g_col1, g_col2 = st.columns(2)
 
-        with g_col1:
-            st.caption(item["data_str"])
+        # Estrutura do Carrossel por Abas
+        tab1, tab2, tab3 = st.tabs(
+            [
+                "🧪 1. Caracterização",
+                "📊 2. Composições e Carga",
+                "📈 3. Rendimento",
+            ]
+        )
+
+        # ABA 1: CARACTERIZAÇÃO
+        with tab1:
+            st.markdown("**Compostos Registrados**")
+            for comp in item["compostos"]:
+                st.markdown(
+                    f'<span class="pill-tag">{comp["nome"]}</span>',
+                    unsafe_allow_html=True,
+                )
+                st.caption(
+                    f"Concentração de sólidos voláteis: **{comp['conc']}**"
+                )
+                if "massa_sv" in comp:
+                    st.caption(
+                        f"Massa de SV correspondente: **{comp['massa_sv']}**"
+                    )
+
+        # ABA 2: COMPOSIÇÕES ESTUDADAS E CARGA
+        with tab2:
+            st.markdown("**Detalhes das Composições e Reagentes**")
+            composicoes = item.get("composicoes_estudadas", [])
+
+            if composicoes:
+                for comp_est in composicoes:
+                    with st.container(border=True):
+                        st.markdown(
+                            f"**Composição (I:S):** `{comp_est['proporcao']}`"
+                        )
+                        st.caption(
+                            f"🧪 **Carga Orgânica:** `{comp_est['carga']}`"
+                        )
+                        st.markdown("**Reagentes Utilizados:**")
+                        for r in comp_est["reagentes"]:
+                            st.caption(
+                                f"• **{r['nome']}**: `Quantidade inserida: {r['qtd']}`"
+                            )
+            else:
+                st.caption(
+                    f"⚖️ Massa Total de SV adicionada: **{item.get('massa_sv_total', 'N/A')}**"
+                )
+                st.caption(
+                    f"🧪 Carga da Composição: **{item.get('carga_volumetrica', 'N/A')}**"
+                )
+
+        # ABA 3: GRÁFICO DE RENDIMENTO
+        with tab3:
+            st.markdown("**Rendimento do Ensaio**")
             if item["tem_grafico"]:
-                fig, ax = plt.subplots(figsize=(4, 2.2))
+                fig, ax = plt.subplots(figsize=(5, 2.5))
                 fig.patch.set_facecolor("#18181B")
                 ax.set_facecolor("#18181B")
                 ax.bar(
@@ -462,40 +515,15 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                 )
                 ax.tick_params(colors="#A1A1AA", labelsize=8)
                 ax.set_ylabel(
-                    "Rendimento (mL CH4/g SV)", color="#A1A1AA", fontsize=7
+                    "Rendimento (mL CH4/g SV)", color="#A1A1AA", fontsize=8
                 )
                 for spine in ax.spines.values():
                     spine.set_color("#27272A")
                 st.pyplot(fig)
             else:
-                st.info("Gráfico Indisponível")
-
-        with g_col2:
-            st.markdown("**Caracterização**")
-
-            # Exibição dos dados de Carga Orgânica da Composição
-            massa_total = item.get("massa_sv_total", "N/A")
-            carga = item.get("carga_volumetrica", "N/A")
-
-            st.caption(
-                f"⚖️ **Massa Total de SV adicionada:** `{massa_total}`"
-            )
-            st.caption(
-                f"🧪 **Carga da Composição (g SV/mL Útil):** `{carga}`"
-            )
-            st.write("---")
-
-            for comp in item["compostos"]:
-                st.markdown(
-                    f'<span class="pill-tag">{comp["nome"]}</span>',
-                    unsafe_allow_html=True,
+                st.info(
+                    "Gráfico indisponível para este lançamento em andamento."
                 )
-                st.caption(
-                    f"Concentração de sólidos voláteis: {comp['conc']}"
-                )
-                st.caption(f"Quantidade inserida: {comp['qtd']}")
-                if "massa_sv" in comp:
-                    st.caption(f"Massa de SV: {comp['massa_sv']}")
 
 if st.session_state.scroll_to_novo:
     st.session_state.scroll_to_novo = False

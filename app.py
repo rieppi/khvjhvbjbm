@@ -140,53 +140,35 @@ if "lista_lancamentos" not in st.session_state:
 
 
 # ---------------------------------------------------------
-# MODAL 1: DIMENSIONAMENTO DO ENSAIO
+# MODAL 1: DIMENSIONAMENTO DO ENSAIO (ORDEM INVERTIDA)
 # ---------------------------------------------------------
 @st.dialog("Dimensionamento do Ensaio", width="small")
 def modal_calcular_volume():
+    # ETAPA 1: Identificação e Período (Antiga Etapa 3)
     if st.session_state.etapa_modal_vol == 1:
-        st.markdown("### 1. Caracterização")
+        st.markdown("### 1. Identificação e Período")
 
-        for i, comp in enumerate(st.session_state.compostos):
-            with st.container(border=True):
-                st.markdown(f"**Composto {i+1}**")
+        nome_lancamento = st.text_input(
+            "Nome do Lançamento",
+            value=f"Lançamento {date.today().strftime('%d/%m/%Y')}",
+            key="input_nome_lancamento",
+        )
 
-                novo_nome = st.text_input(
-                    f"Nome do composto {i+1}",
-                    value=comp["nome"],
-                    key=f"nome_comp_{i}",
-                    label_visibility="collapsed",
-                    placeholder="Nome do composto",
-                )
-                st.session_state.compostos[i]["nome"] = novo_nome
+        st.write("")
+        corrigir_ph = st.checkbox("Será feita a correção de pH", value=False)
 
-                c_val, c_unit = st.columns([3, 1])
-                novo_val = c_val.number_input(
-                    f"Valor {i+1}",
-                    value=comp["valor"],
-                    key=f"val_comp_{i}",
-                    label_visibility="collapsed",
-                )
-                nova_unit = c_unit.selectbox(
-                    f"Unidade {i+1}",
-                    ["g/mL", "g/g"],
-                    index=0 if comp["unidade"] == "g/mL" else 1,
-                    key=f"unit_comp_{i}",
-                    label_visibility="collapsed",
-                )
+        st.write("---")
+        st.markdown("**Período de Digestão**")
+        d_col1, d_col2 = st.columns(2)
+        d_inicio = d_col1.date_input(
+            "Data Inicial", value=date.today(), key="dt_inicio_e3"
+        )
+        d_fim = d_col2.date_input(
+            "Data Final", value=date.today(), key="dt_fim_e3"
+        )
 
-                st.session_state.compostos[i]["valor"] = novo_val
-                st.session_state.compostos[i]["unidade"] = nova_unit
-
-        if st.button("➕ Adicionar composto", key="add_comp"):
-            st.session_state.compostos.append(
-                {
-                    "nome": f"Composto {len(st.session_state.compostos) + 1}",
-                    "valor": 0.0,
-                    "unidade": "g/mL",
-                }
-            )
-            st.rerun()
+        dias = max(0, (d_fim - d_inicio).days)
+        st.caption(f"⏱️ **{dias} dias de digestão**")
 
         st.write("---")
 
@@ -195,9 +177,13 @@ def modal_calcular_volume():
             if st.button(
                 "Próximo ➔", key="btn_vol_next1", use_container_width=True
             ):
+                st.session_state.temp_dt_inicio = d_inicio
+                st.session_state.temp_dias = dias
+                st.session_state.temp_nome_lancamento = nome_lancamento
                 st.session_state.etapa_modal_vol = 2
                 st.rerun()
 
+    # ETAPA 2: Condições dos reatores (Permanece)
     elif st.session_state.etapa_modal_vol == 2:
         st.markdown("### 2. Condições dos reatores")
 
@@ -258,30 +244,50 @@ def modal_calcular_volume():
                 st.session_state.etapa_modal_vol = 3
                 st.rerun()
 
+    # ETAPA 3: Caracterização e Cálculo Final (Antiga Etapa 1)
     elif st.session_state.etapa_modal_vol == 3:
-        st.markdown("### 3. Identificação e Período")
+        st.markdown("### 3. Caracterização")
 
-        nome_lancamento = st.text_input(
-            "Nome do Lançamento",
-            value=f"Lançamento {date.today().strftime('%d/%m/%Y')}",
-            key="input_nome_lancamento",
-        )
+        for i, comp in enumerate(st.session_state.compostos):
+            with st.container(border=True):
+                st.markdown(f"**Composto {i+1}**")
 
-        st.write("")
-        corrigir_ph = st.checkbox("Será feita a correção de pH", value=False)
+                novo_nome = st.text_input(
+                    f"Nome do composto {i+1}",
+                    value=comp["nome"],
+                    key=f"nome_comp_{i}",
+                    label_visibility="collapsed",
+                    placeholder="Nome do composto",
+                )
+                st.session_state.compostos[i]["nome"] = novo_nome
 
-        st.write("---")
-        st.markdown("**Período de Digestão**")
-        d_col1, d_col2 = st.columns(2)
-        d_inicio = d_col1.date_input(
-            "Data Inicial", value=date.today(), key="dt_inicio_e3"
-        )
-        d_fim = d_col2.date_input(
-            "Data Final", value=date.today(), key="dt_fim_e3"
-        )
+                c_val, c_unit = st.columns([3, 1])
+                novo_val = c_val.number_input(
+                    f"Valor {i+1}",
+                    value=comp["valor"],
+                    key=f"val_comp_{i}",
+                    label_visibility="collapsed",
+                )
+                nova_unit = c_unit.selectbox(
+                    f"Unidade {i+1}",
+                    ["g/mL", "g/g"],
+                    index=0 if comp["unidade"] == "g/mL" else 1,
+                    key=f"unit_comp_{i}",
+                    label_visibility="collapsed",
+                )
 
-        dias = max(0, (d_fim - d_inicio).days)
-        st.caption(f"⏱️ **{dias} dias de digestão**")
+                st.session_state.compostos[i]["valor"] = novo_val
+                st.session_state.compostos[i]["unidade"] = nova_unit
+
+        if st.button("➕ Adicionar composto", key="add_comp"):
+            st.session_state.compostos.append(
+                {
+                    "nome": f"Composto {len(st.session_state.compostos) + 1}",
+                    "valor": 0.0,
+                    "unidade": "g/mL",
+                }
+            )
+            st.rerun()
 
         st.write("---")
 
@@ -371,12 +377,19 @@ def modal_calcular_volume():
                         }
                     )
 
+                nome_lan = st.session_state.get(
+                    "temp_nome_lancamento",
+                    f"Lançamento {date.today().strftime('%d/%m/%Y')}",
+                )
+                dt_ini = st.session_state.get("temp_dt_inicio", date.today())
+                dias_lan = st.session_state.get("temp_dias", 0)
+
                 novo_id = f"lanc_{len(st.session_state.lista_lancamentos) + 1}"
                 novo_item = {
                     "id": novo_id,
-                    "titulo": nome_lancamento,
+                    "titulo": nome_lan,
                     "status": "Em andamento",
-                    "data_str": f"{d_inicio.strftime('%d/%m/%Y')} • {dias} dias de digestão",
+                    "data_str": f"{dt_ini.strftime('%d/%m/%Y')} • {dias_lan} dias de digestão",
                     "tem_grafico": False,
                     "massa_sv_total_val": massa_sv_total,
                     "massa_sv_total": f"{massa_sv_total:.2f} g SV",
@@ -696,26 +709,30 @@ def modal_estimar_composicao():
 # ---------------------------------------------------------
 # INTERFACE PRINCIPAL (DASHBOARD)
 # ---------------------------------------------------------
-st.title("👋 Olá, [nome]!")
+st.title("👋 Olá, Pesquisador!")
 
 if "toast_msg" in st.session_state and st.session_state.toast_msg:
     st.toast(st.session_state.toast_msg, icon="🎉")
     del st.session_state["toast_msg"]
 
 col_b1, col_b2, col_b3 = st.columns(3)
+
 with col_b1:
-    if st.button("➤ Quero calcular o volume", use_container_width=True):
+    if st.button("➕ Registrar lançamento", type="primary", use_container_width=True):
         st.session_state.etapa_modal_vol = 1
         st.session_state.modal_ativo = "volume"
+    st.caption("Registre e calcule automaticamente o volume ou massa dos compostos a serem utilizados")
 
 with col_b2:
-    if st.button("➤ Quero calcular o rendimento", use_container_width=True):
+    if st.button("📊 Calcular rendimento", use_container_width=True):
         st.session_state.etapa_modal_rend = 1
         st.session_state.modal_ativo = "rendimento"
+    st.caption("Insira os dados medidos nas réplicas para obter médias e gráficos de rendimento")
 
 with col_b3:
-    if st.button("➤ Quero estimar a melhor composição", use_container_width=True):
+    if st.button("🎯 Estimar melhor composição", use_container_width=True):
         st.session_state.modal_ativo = "otimizacao"
+    st.caption("Analise o histórico e encontre a proporção ideal entre os compostos")
 
 # Renderização do Modal Ativo (Garante apenas um por execução)
 if st.session_state.modal_ativo == "volume":

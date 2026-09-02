@@ -56,7 +56,8 @@ if "compostos" not in st.session_state:
 
 if "condicoes" not in st.session_state:
     st.session_state.condicoes = [
-        {"headspace": 30.0, "composicao": "2:1", "replicas": 3}
+        {"headspace": 30.0, "composicao": "2:1", "replicas": 3},
+        {"headspace": 30.0, "composicao": "1:1", "replicas": 3},
     ]
 
 if "lista_lancamentos" not in st.session_state:
@@ -67,26 +68,42 @@ if "lista_lancamentos" not in st.session_state:
             "status": "Em andamento",
             "data_str": "16/06/2023 • 31 dias de digestão",
             "tem_grafico": False,
+            "massa_sv_total_val": 14.40,
             "massa_sv_total": "14.40 g SV",
             "carga_volumetrica": "0.082 g SV/mL",
             "compostos": [
                 {
                     "nome": "Inóculo 1",
                     "conc": "12.0 g/mL",
-                    "qtd": "120.0 mL",
-                    "massa_sv": "14.40 g SV",
-                }
+                    "qtd_total": "360.0 mL",
+                },
+                {
+                    "nome": "Substrato 1",
+                    "conc": "40.0 g/g",
+                    "qtd_total": "120.0 g",
+                },
             ],
             "composicoes_estudadas": [
                 {
                     "proporcao": "2:1",
                     "carga": "0.082 g SV/mL",
+                    "massa_sv_val": 14.40,
                     "reagentes": [
                         {"nome": "Inóculo 1", "qtd": "120.0 mL"},
                         {"nome": "Substrato 1", "qtd": "40.0 g"},
                     ],
-                }
+                },
+                {
+                    "proporcao": "1:1",
+                    "carga": "0.082 g SV/mL",
+                    "massa_sv_val": 14.40,
+                    "reagentes": [
+                        {"nome": "Inóculo 1", "qtd": "87.5 mL"},
+                        {"nome": "Substrato 1", "qtd": "87.5 g"},
+                    ],
+                },
             ],
+            "dados_rendimento": None,
         }
     ]
 
@@ -188,14 +205,20 @@ def modal_calcular_volume():
 
         st.write("---")
 
-        col_back, col_next = st.columns([1, 1])
-        if col_back.button("⬅ Voltar", key="btn_vol_back1"):
-            st.session_state.etapa_modal_vol = 1
-            st.rerun()
+        col_back, col_space, col_next = st.columns([2, 3, 2])
+        with col_back:
+            if st.button(
+                "⬅ Voltar", key="btn_vol_back1", use_container_width=True
+            ):
+                st.session_state.etapa_modal_vol = 1
+                st.rerun()
 
-        if col_next.button("Próximo ➔", key="btn_vol_next2"):
-            st.session_state.etapa_modal_vol = 3
-            st.rerun()
+        with col_next:
+            if st.button(
+                "Próximo ➔", key="btn_vol_next2", use_container_width=True
+            ):
+                st.session_state.etapa_modal_vol = 3
+                st.rerun()
 
     elif st.session_state.etapa_modal_vol == 3:
         st.markdown("### 3. Identificação e Período")
@@ -244,20 +267,34 @@ def modal_calcular_volume():
             qtd_compostos = len(st.session_state.compostos)
             massa_sv_total = 0.0
 
+            total_replicas = sum(
+                c["replicas"] for c in st.session_state.condicoes
+            )
+
             for c in st.session_state.compostos:
                 unidade = c["unidade"]
                 val_conc = c["valor"] if c["valor"] > 0 else 1.0
 
                 if unidade == "g/mL":
-                    qtd_val = round((vol_util / max(1, qtd_compostos)), 1)
-                    qtd_str = f"{qtd_val} mL"
-                    massa_sv = qtd_val * (val_conc / 100.0)
+                    qtd_por_reator = round(
+                        (vol_util / max(1, qtd_compostos)), 1
+                    )
+                    qtd_total_ensaio = round(
+                        qtd_por_reator * max(1, total_replicas), 1
+                    )
+                    qtd_str = f"{qtd_por_reator} mL"
+                    qtd_total_str = f"{qtd_total_ensaio} mL"
+                    massa_sv = qtd_por_reator * (val_conc / 100.0)
                 else:
-                    qtd_val = round(
+                    qtd_por_reator = round(
                         (vol_util / max(1, qtd_compostos)) * 0.5, 1
                     )
-                    qtd_str = f"{qtd_val} g"
-                    massa_sv = qtd_val * (val_conc / 100.0)
+                    qtd_total_ensaio = round(
+                        qtd_por_reator * max(1, total_replicas), 1
+                    )
+                    qtd_str = f"{qtd_por_reator} g"
+                    qtd_total_str = f"{qtd_total_ensaio} g"
+                    massa_sv = qtd_por_reator * (val_conc / 100.0)
 
                 massa_sv_total += massa_sv
 
@@ -266,7 +303,7 @@ def modal_calcular_volume():
                         "nome": c["nome"],
                         "conc": f"{c['valor']} {unidade}",
                         "qtd": qtd_str,
-                        "massa_sv": f"{massa_sv:.2f} g SV",
+                        "qtd_total": qtd_total_str,
                     }
                 )
 
@@ -274,7 +311,6 @@ def modal_calcular_volume():
                 massa_sv_total / vol_util if vol_util > 0 else 0.0
             )
 
-            # Montagem das composições para a aba 2 do carrossel
             composicoes_estudadas = []
             for cond in st.session_state.condicoes:
                 reagentes_cond = [
@@ -285,6 +321,7 @@ def modal_calcular_volume():
                     {
                         "proporcao": cond["composicao"],
                         "carga": f"{carga_composicao:.3f} g SV/mL",
+                        "massa_sv_val": massa_sv_total,
                         "reagentes": reagentes_cond,
                     }
                 )
@@ -296,10 +333,12 @@ def modal_calcular_volume():
                 "status": "Em andamento",
                 "data_str": f"{d_inicio.strftime('%d/%m/%Y')} • {dias} dias de digestão",
                 "tem_grafico": False,
+                "massa_sv_total_val": massa_sv_total,
                 "massa_sv_total": f"{massa_sv_total:.2f} g SV",
                 "carga_volumetrica": f"{carga_composicao:.3f} g SV/mL",
                 "compostos": compostos_calculados,
                 "composicoes_estudadas": composicoes_estudadas,
+                "dados_rendimento": None,
             }
 
             st.session_state.lista_lancamentos.insert(0, novo_item)
@@ -313,85 +352,96 @@ def modal_calcular_volume():
 
 
 # ---------------------------------------------------------
-# MODAL 2: RENDIMENTO
+# MODAL 2: RENDIMENTO (PUXANDO DADOS DAS COMPOSIÇÕES)
 # ---------------------------------------------------------
-@st.dialog("Rendimento", width="small")
+@st.dialog("Cálculo de Rendimento do Ensaio", width="medium")
 def modal_calcular_rendimento():
-    if st.session_state.etapa_modal_rend == 1:
-        opcoes_lancamentos = [
-            item["titulo"] for item in st.session_state.lista_lancamentos
-        ]
-        st.selectbox(
-            "Selecione o lançamento",
-            opcoes_lancamentos,
-            label_visibility="collapsed",
+    if not st.session_state.lista_lancamentos:
+        st.warning("Nenhum lançamento registrado até o momento.")
+        return
+
+    titulos_lancamentos = [
+        item["titulo"] for item in st.session_state.lista_lancamentos
+    ]
+    escolha_titulo = st.selectbox(
+        "Selecione o Lançamento para puxar os dados:", titulos_lancamentos
+    )
+
+    # Seleção do item escolhido
+    lanc_selecionado = next(
+        item
+        for item in st.session_state.lista_lancamentos
+        if item["titulo"] == escolha_titulo
+    )
+
+    st.write("---")
+    st.markdown("**Insira os dados medidos para cada composição:**")
+
+    composicoes = lanc_selecionado.get("composicoes_estudadas", [])
+    resultados_rendimento = []
+
+    for idx, comp in enumerate(composicoes):
+        prop = comp["proporcao"]
+        massa_sv = comp.get("massa_sv_val", 1.0)
+        carga = comp.get("carga", "N/A")
+
+        with st.container(border=True):
+            st.markdown(
+                f"### 🧪 Composição `{prop}` (Carga: `{carga}`, SV: `{massa_sv:.2f} g`)"
+            )
+
+            col1, col2 = st.columns(2)
+            metano_pct = col1.number_input(
+                f"Fração de Metano (% CH₄) - Composição {prop}",
+                min_value=0.0,
+                max_value=100.0,
+                value=60.0,
+                step=1.0,
+                key=f"rend_pct_{escolha_titulo}_{idx}",
+            )
+            vol_biogas = col2.number_input(
+                f"Volume de Biogás Total (mL) - Composição {prop}",
+                min_value=0.0,
+                value=350.0,
+                step=10.0,
+                key=f"rend_vol_{escolha_titulo}_{idx}",
+            )
+
+            # Cálculo individual
+            vol_ch4 = vol_biogas * (metano_pct / 100.0)
+            rendimento_esp = vol_ch4 / massa_sv if massa_sv > 0 else 0.0
+
+            st.caption(
+                f"💡 **Volume CH₄ Puro:** `{vol_ch4:.1f} mL` | **Rendimento Calculado:** `{rendimento_esp:.2f} mL CH₄/g SV`"
+            )
+
+            resultados_rendimento.append(
+                {
+                    "composicao": prop,
+                    "fracao_metano": metano_pct,
+                    "vol_biogas": vol_biogas,
+                    "vol_ch4": vol_ch4,
+                    "rendimento": rendimento_esp,
+                }
+            )
+
+    st.write("---")
+
+    if st.button(
+        "📊 Gerar Gráfico e Salvar Rendimento",
+        type="primary",
+        use_container_width=True,
+    ):
+        # Atualização do lançamento com os resultados finais
+        lanc_selecionado["tem_grafico"] = True
+        lanc_selecionado["status"] = "Finalizado"
+        lanc_selecionado["dados_rendimento"] = resultados_rendimento
+
+        st.toast(
+            "Gráfico gerado e rendimento registrado com sucesso!", icon="🎉"
         )
-
-        st.markdown(
-            '<span class="pill-tag">Composição 1:2</span>',
-            unsafe_allow_html=True,
-        )
-
-        col_m1, col_m2 = st.columns([3, 1])
-        f_metano = col_m1.number_input(
-            "Fração de Metano",
-            value=60.0,
-            step=1.0,
-            label_visibility="collapsed",
-        )
-        col_m2.text_input(
-            "Unidade Metano",
-            value="%",
-            disabled=True,
-            label_visibility="collapsed",
-        )
-
-        col_v1, col_v2 = st.columns([3, 1])
-        v_biogas = col_v1.number_input(
-            "Volume de Biogás",
-            value=350.0,
-            step=10.0,
-            label_visibility="collapsed",
-        )
-        col_v2.text_input(
-            "Unidade Biogás",
-            value="mL",
-            disabled=True,
-            label_visibility="collapsed",
-        )
-
-        st.write("---")
-
-        _, col_next = st.columns([3, 1])
-        if col_next.button("Próximo ➔", key="btn_rend_next"):
-            st.session_state.fracao_metano = f_metano
-            st.session_state.vol_biogas = v_biogas
-            st.session_state.etapa_modal_rend = 2
-            st.rerun()
-
-    elif st.session_state.etapa_modal_rend == 2:
-        st.markdown("### Resultado Estimado")
-
-        f_metano = st.session_state.get("fracao_metano", 60.0)
-        v_biogas = st.session_state.get("vol_biogas", 350.0)
-        v_ch4 = v_biogas * (f_metano / 100.0)
-
-        st.metric("Volume de Metano Puro", f"{v_ch4:.1f} mL CH₄")
-
-        if st.button(
-            "💾 Salvar Rendimento", use_container_width=True, type="primary"
-        ):
-            st.toast("Rendimento salvo com sucesso!", icon="🎉")
-            st.session_state.etapa_modal_rend = 1
-            st.session_state.abrir_modal_rend = False
-            st.rerun()
-
-        st.write("---")
-
-        col_back, _ = st.columns([1, 3])
-        if col_back.button("⬅ Voltar", key="btn_rend_back"):
-            st.session_state.etapa_modal_rend = 1
-            st.rerun()
+        st.session_state.abrir_modal_rend = False
+        st.rerun()
 
 
 # ---------------------------------------------------------
@@ -411,7 +461,6 @@ with col_b1:
 
 with col_b2:
     if st.button("➤ Quero calcular o rendimento", use_container_width=True):
-        st.session_state.etapa_modal_rend = 1
         st.session_state.abrir_modal_rend = True
 
 with col_b3:
@@ -468,10 +517,10 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                 st.caption(
                     f"Concentração de sólidos voláteis: **{comp['conc']}**"
                 )
-                if "massa_sv" in comp:
-                    st.caption(
-                        f"Massa de SV correspondente: **{comp['massa_sv']}**"
-                    )
+                qtd_tot = comp.get("qtd_total", "N/A")
+                st.caption(
+                    f"📦 Volume/Massa total utilizada no ensaio: **{qtd_tot}**"
+                )
 
         # ABA 2: COMPOSIÇÕES ESTUDADAS E CARGA
         with tab2:
@@ -487,42 +536,66 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                         st.caption(
                             f"🧪 **Carga Orgânica:** `{comp_est['carga']}`"
                         )
-                        st.markdown("**Reagentes Utilizados:**")
+                        st.markdown("**Reagentes Utilizados por Reator:**")
                         for r in comp_est["reagentes"]:
                             st.caption(
                                 f"• **{r['nome']}**: `Quantidade inserida: {r['qtd']}`"
                             )
-            else:
-                st.caption(
-                    f"⚖️ Massa Total de SV adicionada: **{item.get('massa_sv_total', 'N/A')}**"
-                )
-                st.caption(
-                    f"🧪 Carga da Composição: **{item.get('carga_volumetrica', 'N/A')}**"
-                )
 
-        # ABA 3: GRÁFICO DE RENDIMENTO
+        # ABA 3: GRÁFICO DE RENDIMENTO COM DUPLO EIXO Y
         with tab3:
-            st.markdown("**Rendimento do Ensaio**")
-            if item["tem_grafico"]:
-                fig, ax = plt.subplots(figsize=(5, 2.5))
+            st.markdown("**Rendimento e Qualidade do Biogás**")
+            dados_r = item.get("dados_rendimento")
+
+            if item["tem_grafico"] and dados_r:
+                comp_labels = [d["composicao"] for d in dados_r]
+                rendimentos = [d["rendimento"] for d in dados_r]
+                fracoes_ch4 = [d["fracao_metano"] for d in dados_r]
+
+                # Construção do gráfico de barras com duplo eixo Y
+                fig, ax1 = plt.subplots(figsize=(6, 3))
                 fig.patch.set_facecolor("#18181B")
-                ax.set_facecolor("#18181B")
-                ax.bar(
-                    ["1:2", "2:1", "1:3", "1:1"],
-                    [380, 240, 310, 290],
+                ax1.set_facecolor("#18181B")
+
+                # Eixo Y1 (Esquerdo) - Rendimento
+                bars = ax1.bar(
+                    comp_labels,
+                    rendimentos,
                     color="#818CF8",
-                    width=0.45,
+                    width=0.35,
+                    label="Rendimento (mL CH4/g SV)",
                 )
-                ax.tick_params(colors="#A1A1AA", labelsize=8)
-                ax.set_ylabel(
-                    "Rendimento (mL CH4/g SV)", color="#A1A1AA", fontsize=8
+                ax1.set_xlabel(
+                    "Composições (I:S)", color="#A1A1AA", fontsize=9
                 )
-                for spine in ax.spines.values():
+                ax1.set_ylabel(
+                    "Rendimento (mL CH4/g SV)", color="#818CF8", fontsize=8
+                )
+                ax1.tick_params(colors="#A1A1AA", labelsize=8)
+
+                # Eixo Y2 (Direito) - Fração de Metano
+                ax2 = ax1.twinx()
+                ax2.plot(
+                    comp_labels,
+                    fracoes_ch4,
+                    color="#FACC15",
+                    marker="o",
+                    linewidth=2,
+                    label="% CH4",
+                )
+                ax2.set_ylabel("% CH4 Biometano", color="#FACC15", fontsize=8)
+                ax2.tick_params(colors="#A1A1AA", labelsize=8)
+                ax2.set_ylim(0, 100)
+
+                for spine in ax1.spines.values():
                     spine.set_color("#27272A")
+                for spine in ax2.spines.values():
+                    spine.set_color("#27272A")
+
                 st.pyplot(fig)
             else:
                 st.info(
-                    "Gráfico indisponível para este lançamento em andamento."
+                    "Gráfico ainda não gerado. Calcule o rendimento clicando no botão no topo da página."
                 )
 
 if st.session_state.scroll_to_novo:

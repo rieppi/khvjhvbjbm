@@ -33,29 +33,70 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Inicialização de estados
+# Inicialização de estados do modal e formulário
+if "abrir_modal_vol" not in st.session_state:
+    st.session_state.abrir_modal_vol = False
+if "abrir_modal_rend" not in st.session_state:
+    st.session_state.abrir_modal_rend = False
+
 if "etapa_modal_vol" not in st.session_state:
     st.session_state.etapa_modal_vol = 1
 if "etapa_modal_rend" not in st.session_state:
     st.session_state.etapa_modal_rend = 1
+
 if "compostos" not in st.session_state:
     st.session_state.compostos = [
         {"nome": "Inóculo 1", "valor": 15.0, "unidade": "g/mL"},
         {"nome": "Substrato 1", "valor": 40.0, "unidade": "g/g"},
     ]
 
+if "condicoes" not in st.session_state:
+    st.session_state.condicoes = [
+        {"headspace": 30.0, "composicao": "2:1", "replicas": 3}
+    ]
+
+if "lista_lancamentos" not in st.session_state:
+    st.session_state.lista_lancamentos = [
+        {
+            "titulo": "Lançamento 09/06/2023",
+            "status": "Finalizado",
+            "data_str": "09/06/2023 • 31 dias de digestão",
+            "tem_grafico": True,
+            "compostos": [
+                {
+                    "nome": "Inóculo 1",
+                    "conc": "15.0 g/mL",
+                    "qtd": "150.0 mL",
+                },
+                {"nome": "Substrato 1", "conc": "40.0 g/g", "qtd": "50.0 g"},
+            ],
+        },
+        {
+            "titulo": "Lançamento 16/06/2023",
+            "status": "Em andamento",
+            "data_str": "16/06/2023 • 31 dias de digestão",
+            "tem_grafico": False,
+            "compostos": [
+                {
+                    "nome": "Inóculo 1",
+                    "conc": "12.0 g/mL",
+                    "qtd": "120.0 mL",
+                }
+            ],
+        },
+    ]
+
 
 # ---------------------------------------------------------
-# MODAL 1: DIMENSIONAMENTO DO ENSAIO
+# MODAL 1: DIMENSIONAMENTO DO ENSAIO (3 ETAPAS)
 # ---------------------------------------------------------
 @st.dialog("Dimensionamento do Ensaio", width="small")
 def modal_calcular_volume():
+    # ETAPA 1: Caracterização dos Compostos
     if st.session_state.etapa_modal_vol == 1:
-        st.markdown("### Caracterização")
+        st.markdown("### 1. Caracterização")
 
-        # Renderização dinâmica dos compostos
         for i, comp in enumerate(st.session_state.compostos):
-            # Nome editável em pill/badge personalizada ou caixa de texto simples
             novo_nome = st.text_input(
                 f"Nome do composto {i+1}",
                 value=comp["nome"],
@@ -64,7 +105,6 @@ def modal_calcular_volume():
             )
             st.session_state.compostos[i]["nome"] = novo_nome
 
-            # Inputs de Valor e Unidade
             c_val, c_unit = st.columns([3, 1])
             novo_val = c_val.number_input(
                 f"Valor {i+1}",
@@ -83,7 +123,6 @@ def modal_calcular_volume():
             st.session_state.compostos[i]["valor"] = novo_val
             st.session_state.compostos[i]["unidade"] = nova_unit
 
-        # Botão para adicionar novo composto dinâmico
         if st.button("➕ Adicionar composto", key="add_comp"):
             st.session_state.compostos.append(
                 {
@@ -96,36 +135,125 @@ def modal_calcular_volume():
 
         st.write("---")
 
-        # Botão posicionado no canto inferior direito
         _, col_next = st.columns([3, 1])
-        if col_next.button("Próximo ➔", key="btn_vol_next"):
+        if col_next.button("Próximo ➔", key="btn_vol_next1"):
             st.session_state.etapa_modal_vol = 2
             st.rerun()
 
+    # ETAPA 2: Condições dos Reatores
     elif st.session_state.etapa_modal_vol == 2:
-        st.markdown("### Condições dos reatores")
-        d_col1, d_col2 = st.columns(2)
-        d_col1.date_input("Data Inicial", value=date.today())
-        d_col2.date_input("Data Final", value=date.today())
+        st.markdown("### 2. Condições dos reatores")
 
-        st.number_input("Headspace desejado (%)", value=30.0, step=5.0)
-        st.text_input("Composição 1 (I:S)", value="2:1")
-        st.number_input("Número de réplicas", value=3, step=1)
+        for i, cond in enumerate(st.session_state.condicoes):
+            with st.container(border=True):
+                st.markdown("**Headspace desejado (%)**")
+                hs = st.number_input(
+                    f"Headspace {i}",
+                    value=cond["headspace"],
+                    step=5.0,
+                    key=f"hs_{i}",
+                    label_visibility="collapsed",
+                )
 
-        st.button("➕ Adicionar condição", key="add_cond")
+                st.markdown(f"**Composição {i+1} (I:S)**")
+                comp = st.text_input(
+                    f"Composição {i}",
+                    value=cond["composicao"],
+                    key=f"comp_{i}",
+                    label_visibility="collapsed",
+                )
 
-        if st.button(
-            "🚀 Finalizar e Calcular", use_container_width=True, type="primary"
-        ):
-            st.success("Cálculo realizado!")
-            st.session_state.etapa_modal_vol = 1
+                st.markdown("**Número de réplicas**")
+                rep = st.number_input(
+                    f"Réplicas {i}",
+                    value=cond["replicas"],
+                    step=1,
+                    key=f"rep_{i}",
+                    label_visibility="collapsed",
+                )
+
+                st.session_state.condicoes[i] = {
+                    "headspace": hs,
+                    "composicao": comp,
+                    "replicas": rep,
+                }
+
+        if st.button("➕ Adicionar condição", key="add_cond"):
+            st.session_state.condicoes.append(
+                {"headspace": 30.0, "composicao": "1:1", "replicas": 3}
+            )
             st.rerun()
 
         st.write("---")
 
-        col_back, _ = st.columns([1, 3])
-        if col_back.button("⬅ Voltar", key="btn_vol_back"):
+        col_back, col_next = st.columns([1, 1])
+        if col_back.button("⬅ Voltar", key="btn_vol_back1"):
             st.session_state.etapa_modal_vol = 1
+            st.rerun()
+
+        if col_next.button("Próximo ➔", key="btn_vol_next2"):
+            st.session_state.etapa_modal_vol = 3
+            st.rerun()
+
+    # ETAPA 3: Identificação, Correção de pH e Período de Digestão
+    elif st.session_state.etapa_modal_vol == 3:
+        st.markdown("### 3. Identificação e Período")
+
+        st.markdown("**Nome do Lançamento**")
+        nome_lancamento = st.text_input(
+            "Nome do Lançamento",
+            value=f"Lançamento {date.today().strftime('%d/%m/%Y')}",
+            key="input_nome_lancamento",
+            label_visibility="collapsed",
+        )
+
+        st.write("")
+        corrigir_ph = st.checkbox("Será feita a correção de pH", value=False)
+
+        st.write("---")
+        st.markdown("**Período de Digestão**")
+        d_col1, d_col2 = st.columns(2)
+        d_inicio = d_col1.date_input(
+            "Data Inicial", value=date.today(), key="dt_inicio_e3"
+        )
+        d_fim = d_col2.date_input(
+            "Data Final", value=date.today(), key="dt_fim_e3"
+        )
+
+        dias = max(0, (d_fim - d_inicio).days)
+        st.caption(f"⏱️ **{dias} dias de digestão**")
+
+        st.write("---")
+
+        col_back, col_finish = st.columns([1, 1])
+        if col_back.button("⬅ Voltar", key="btn_vol_back2"):
+            st.session_state.etapa_modal_vol = 2
+            st.rerun()
+
+        if col_finish.button(
+            "🚀 Finalizar e Calcular", type="primary", key="btn_vol_finish"
+        ):
+            # Adiciona o novo lançamento na lista do dashboard
+            novo_item = {
+                "titulo": nome_lancamento,
+                "status": "Em andamento",
+                "data_str": f"{d_inicio.strftime('%d/%m/%Y')} • {dias} dias de digestão",
+                "tem_grafico": False,
+                "compostos": [
+                    {
+                        "nome": c["nome"],
+                        "conc": f"{c['valor']} {c['unidade']}",
+                        "qtd": "0.0 mL",
+                    }
+                    for c in st.session_state.compostos
+                ],
+            }
+
+            st.session_state.lista_lancamentos.insert(0, novo_item)
+
+            st.success("Lançamento adicionado com sucesso!")
+            st.session_state.etapa_modal_vol = 1
+            st.session_state.abrir_modal_vol = False
             st.rerun()
 
 
@@ -135,9 +263,12 @@ def modal_calcular_volume():
 @st.dialog("Rendimento", width="small")
 def modal_calcular_rendimento():
     if st.session_state.etapa_modal_rend == 1:
+        opcoes_lancamentos = [
+            item["titulo"] for item in st.session_state.lista_lancamentos
+        ]
         st.selectbox(
             "Selecione o lançamento",
-            ["Lançamento 09/06/2023", "Lançamento 16/06/2023"],
+            opcoes_lancamentos,
             label_visibility="collapsed",
         )
 
@@ -197,6 +328,7 @@ def modal_calcular_rendimento():
         ):
             st.success("Rendimento salvo!")
             st.session_state.etapa_modal_rend = 1
+            st.session_state.abrir_modal_rend = False
             st.rerun()
 
         st.write("---")
@@ -216,79 +348,72 @@ col_b1, col_b2, col_b3 = st.columns(3)
 with col_b1:
     if st.button("➤ Quero calcular o volume", use_container_width=True):
         st.session_state.etapa_modal_vol = 1
-        modal_calcular_volume()
+        st.session_state.abrir_modal_vol = True
 
 with col_b2:
     if st.button("➤ Quero calcular o rendimento", use_container_width=True):
         st.session_state.etapa_modal_rend = 1
-        modal_calcular_rendimento()
+        st.session_state.abrir_modal_rend = True
 
 with col_b3:
     st.button("➤ Quero estimar a melhor composição", use_container_width=True)
 
+if st.session_state.abrir_modal_vol:
+    modal_calcular_volume()
+
+if st.session_state.abrir_modal_rend:
+    modal_calcular_rendimento()
+
 st.write("---")
 st.subheader("Meus lançamentos")
 
-# Lançamento 1
-with st.expander("Lançamento 09/06/2023", expanded=True):
-    st.markdown(
-        '<span class="badge-status-green">Finalizado</span>',
-        unsafe_allow_html=True,
-    )
-    st.write("")
+# Renderização dinâmica dos Lançamentos da Lista
+for idx, item in enumerate(st.session_state.lista_lancamentos):
+    with st.expander(item["titulo"], expanded=(idx == 0)):
+        if item["status"] == "Finalizado":
+            st.markdown(
+                '<span class="badge-status-green">Finalizado</span>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<span class="badge-status-yellow">Em andamento</span>',
+                unsafe_allow_html=True,
+            )
 
-    g_col1, g_col2 = st.columns(2)
-    with g_col1:
-        st.caption("09/06/2023 • 31 dias de digestão")
+        st.write("")
+        g_col1, g_col2 = st.columns(2)
 
-        fig, ax = plt.subplots(figsize=(4, 2.2))
-        fig.patch.set_facecolor("#18181B")
-        ax.set_facecolor("#18181B")
-        ax.bar(
-            ["1:2", "2:1", "1:3", "1:1"],
-            [380, 240, 310, 290],
-            color="#818CF8",
-            width=0.45,
-        )
-        ax.tick_params(colors="#A1A1AA", labelsize=8)
-        ax.set_ylabel("Rendimento (mL CH4/g SV)", color="#A1A1AA", fontsize=7)
-        for spine in ax.spines.values():
-            spine.set_color("#27272A")
-        st.pyplot(fig)
+        with g_col1:
+            st.caption(item["data_str"])
+            if item["tem_grafico"]:
+                fig, ax = plt.subplots(figsize=(4, 2.2))
+                fig.patch.set_facecolor("#18181B")
+                ax.set_facecolor("#18181B")
+                ax.bar(
+                    ["1:2", "2:1", "1:3", "1:1"],
+                    [380, 240, 310, 290],
+                    color="#818CF8",
+                    width=0.45,
+                )
+                ax.tick_params(colors="#A1A1AA", labelsize=8)
+                ax.set_ylabel(
+                    "Rendimento (mL CH4/g SV)", color="#A1A1AA", fontsize=7
+                )
+                for spine in ax.spines.values():
+                    spine.set_color("#27272A")
+                st.pyplot(fig)
+            else:
+                st.info("Gráfico Indisponível")
 
-    with g_col2:
-        st.markdown("**Caracterização**")
-
-        st.markdown(
-            '<span class="pill-tag">Inóculo 1</span>', unsafe_allow_html=True
-        )
-        st.caption("Concentração de sólidos voláteis: 15.0 g/mL")
-        st.caption("Quantidade inserida: 150.0 mL")
-
-        st.markdown(
-            '<span class="pill-tag">Substrato 1</span>', unsafe_allow_html=True
-        )
-        st.caption("Concentração de sólidos voláteis: 40.0 g/g")
-        st.caption("Quantidade inserida: 50.0 g")
-
-# Lançamento 2
-with st.expander("Lançamento 16/06/2023", expanded=False):
-    st.markdown(
-        '<span class="badge-status-yellow">Em andamento</span>',
-        unsafe_allow_html=True,
-    )
-    st.write("")
-
-    g_col3, g_col4 = st.columns(2)
-    with g_col3:
-        st.caption("16/06/2023 • 31 dias de digestão")
-        st.info("Gráfico Indisponível")
-
-    with g_col4:
-        st.markdown("**Caracterização**")
-
-        st.markdown(
-            '<span class="pill-tag">Inóculo 1</span>', unsafe_allow_html=True
-        )
-        st.caption("Concentração de sólidos voláteis: 12.0 g/mL")
-        st.caption("Quantidade inserida: 120.0 mL")
+        with g_col2:
+            st.markdown("**Caracterização**")
+            for comp in item["compostos"]:
+                st.markdown(
+                    f'<span class="pill-tag">{comp["nome"]}</span>',
+                    unsafe_allow_html=True,
+                )
+                st.caption(
+                    f"Concentração de sólidos voláteis: {comp['conc']}"
+                )
+                st.caption(f"Quantidade inserida: {comp['qtd']}")

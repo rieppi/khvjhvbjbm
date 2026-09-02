@@ -285,30 +285,31 @@ def modal_resumo_popup():
         st.write("Sem dados para exibir.")
         return
 
-    st.subheader(f"🧪 {dados['titulo']}")
-    st.caption(f"Período: {dados['data_str']}")
+    st.subheader(f"🧪 {dados.get('titulo', 'Lançamento')}")
+    st.caption(f"Período: {dados.get('data_str', '')}")
     st.divider()
 
     st.markdown("### Quantidades de Compostos e Parâmetros Médios por Condição")
-    for cond in dados["detalhes_condicoes"]:
+    for cond in dados.get("detalhes_condicoes", []):
         with st.container(border=True):
-            st.markdown(f"**Razão (I:S): `{cond['proporcao']}`** | Headspace: **{cond['headspace']}%** | Vol. Útil: **{cond['vol_util_ml']} mL** | Réplicas: **{cond['replicas']}**")
+            st.markdown(f"**Razão (I:S): `{cond.get('proporcao', '1:1')}`** | Headspace: **{cond.get('headspace', 30.0)}%** | Vol. Útil: **{cond.get('vol_util_ml', 175.0)} mL** | Réplicas: **{cond.get('replicas', 3)}**")
             
             c_comp, c_ph = st.columns([1.2, 1])
             with c_comp:
                 st.markdown("**Substratos/Inóculo por Reator:**")
-                for r in cond["reagentes"]:
-                    st.write(f"• **{r['nome']}**: {r['qtd']}")
+                for r in cond.get("reagentes", []):
+                    st.write(f"• **{r.get('nome', '')}**: {r.get('qtd', '')}")
 
             with c_ph:
                 st.markdown("**Parâmetros Médios:**")
-                st.write(f"• **pH Médio Inicial:** `{cond['ph_medio']:.2f}`")
+                ph_medio_val = cond.get("ph_medio", 7.0)
+                st.write(f"• **pH Médio Inicial:** `{ph_medio_val:.2f}`")
                 
-                bic_m_g = cond["nahco3_medio_g"]
+                bic_m_g = cond.get("nahco3_medio_g", 0.0)
                 if bic_m_g > 0:
-                    st.write(f"• **$\text{{NaHCO}}_3$ Médio:** `{bic_m_g*1000:.1f} mg` ({bic_m_g:.3f} g)")
+                    st.write(f"• **NaHCO₃ Médio:** `{bic_m_g*1000:.1f} mg` ({bic_m_g:.3f} g)")
                 else:
-                    st.write("• **$\text{NaHCO}_3$ Médio:** `0.0 mg` *(pH ≥ 7.00)*")
+                    st.write("• **NaHCO₃ Médio:** `0.0 mg` *(pH ≥ 7.00)*")
 
     st.divider()
     if st.button("👍 Entendido / Sair", type="primary", use_container_width=True):
@@ -493,7 +494,7 @@ def modal_calcular_volume():
     # ETAPA 4: pH Inicial das Réplicas & Médias de NaHCO3
     elif st.session_state.etapa_modal_vol == 4:
         st.subheader("4. pH Inicial das Réplicas")
-        st.caption("Insira o pH inicial individual das réplicas para calcular as médias de pH e Bicarbonato de Sódio ($\text{NaHCO}_3$):")
+        st.caption("Insira o pH inicial individual das réplicas para calcular as médias de pH e Bicarbonato de Sódio (NaHCO₃):")
 
         vol_frasco = 250.0
 
@@ -530,7 +531,7 @@ def modal_calcular_volume():
                 bicarb_medio_cond = float(np.mean(bicarb_por_rep))
 
                 if bicarb_medio_cond > 0:
-                    st.caption(f"💡 **Média do pH:** `{ph_medio_cond:.2f}` | **Média de $\text{{NaHCO}}_3$:** `{bicarb_medio_cond*1000:.1f} mg` ({bicarb_medio_cond:.3f} g)")
+                    st.caption(f"💡 **Média do pH:** `{ph_medio_cond:.2f}` | **Média de NaHCO₃:** `{bicarb_medio_cond*1000:.1f} mg` ({bicarb_medio_cond:.3f} g)")
                 else:
                     st.caption(f"💡 **Média do pH:** `{ph_medio_cond:.2f}` | ✅ pH adequado (≥ 7.00). Nenhum bicarbonato necessário.")
 
@@ -966,17 +967,17 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                     c_hs.markdown(f"**Headspace:** `{comp_est.get('headspace', 'N/A')}%`")
                     c_rep.markdown(f"**Réplicas:** `{comp_est.get('replicas', 'N/A')}`")
 
-                    # pH Médio e Bicarbonato Médio
+                    # pH Médio e Bicarbonato Médio protegidos contra KeyError
                     ph_m = comp_est.get("ph_medio", "N/A")
                     bic_m = comp_est.get("nahco3_medio_g", 0.0)
 
                     st.markdown("**Médias da Condição:**")
                     st.caption(f"• **pH Inicial Médio:** `{ph_m if isinstance(ph_m, str) else f'{ph_m:.2f}'}`")
-                    st.caption(f"• **Média de $\text{{NaHCO}}_3$ Necessário:** `{bic_m*1000:.1f} mg` ({bic_m:.3f} g)")
+                    st.caption(f"• **Média de NaHCO₃ Necessário:** `{bic_m*1000:.1f} mg` ({bic_m:.3f} g)")
 
                     st.caption("**Quantidades por Reator:**")
-                    for r in comp_est["reagentes"]:
-                        st.caption(f"• **{r['nome']}**: {r['qtd']}")
+                    for r in comp_est.get("reagentes", []):
+                        st.caption(f"• **{r.get('nome', '')}**: {r.get('qtd', '')}")
 
         with tab3:
             dados_r = item.get("dados_rendimento")

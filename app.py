@@ -126,7 +126,7 @@ def gerar_pdf_popup_calculos(dados_popup):
 
 
 def gerar_pdf_relatorio_finalizado(item):
-    """Gera PDF completo do lançamento finalizado com os dados de rendimento."""
+    """Gera PDF completo do lançamento finalizado com dados de caracterização, parâmetros e rendimento."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     story = []
@@ -137,32 +137,62 @@ def gerar_pdf_relatorio_finalizado(item):
     body_style = ParagraphStyle('BodyN', parent=styles['Normal'], fontSize=9, leading=12)
 
     # Título
-    story.append(Paragraph(f"<b>Relatório Final do Ensaio: {item.get('titulo', '')}</b>", title_style))
-    story.append(Paragraph(f"Data/Duração: {item.get('data_str', '')} | Status: <b>{item.get('status', '')}</b>", body_style))
+    story.append(Paragraph(f"<b>Relatório Completo de Lançamento: {item.get('titulo', '')}</b>", title_style))
+    story.append(Paragraph(f"Status: <b>{item.get('status', '')}</b> | Detalhes: {item.get('data_str', '')}", body_style))
     story.append(Spacer(1, 15))
 
-    # Tabela Compostos
-    story.append(Paragraph("<b>1. Caracterização dos Compostos Utilizados</b>", sub_style))
+    # Tabela 1: Caracterização dos Compostos
+    story.append(Paragraph("<b>1. Caracterização dos Compostos e Consumo Total</b>", sub_style))
     story.append(Spacer(1, 6))
-    data_comp = [["Composto", "Concentração SV", "Total Consumido no Ensaio"]]
+    data_comp = [["Composto", "Concentração SV", "Total Necessário no Ensaio"]]
     for c in item.get("compostos", []):
-        data_comp.append([c.get("nome", ""), c.get("conc", ""), c.get("qtd_total", "")])
+        data_comp.append([c.get("nome", ""), c.get("conc", ""), c.get("qtd_total", "N/A")])
     
     t_comp = Table(data_comp, colWidths=[200, 150, 180])
     t_comp.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E0E7FF')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#3730A3')),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
     ]))
     story.append(t_comp)
     story.append(Spacer(1, 15))
 
-    # Tabela Rendimento
-    story.append(Paragraph("<b>2. Resultados de Rendimento e Produção de Biogás</b>", sub_style))
+    # Tabela 2: Composições e Condições
+    story.append(Paragraph("<b>2. Composições e Parâmetros Iniciais</b>", sub_style))
+    story.append(Spacer(1, 6))
+    data_cond = [["Razão (I:S)", "Carga Orgânica", "pH Inicial (Média)", "NaHCO3 Médio"]]
+    for comp_est in item.get("composicoes_estudadas", []):
+        ph_m = comp_est.get("ph_medio", "N/A")
+        ph_str = f"{ph_m:.2f}" if isinstance(ph_m, (float, int)) else str(ph_m)
+        
+        bic_m = comp_est.get("nahco3_medio_g", 0.0)
+        bic_str = f"{bic_m*1000:.1f} mg" if bic_m > 0 else "0.0 mg"
+
+        data_cond.append([
+            comp_est.get("proporcao", ""),
+            comp_est.get("carga", ""),
+            ph_str,
+            bic_str
+        ])
+
+    t_cond = Table(data_cond, colWidths=[130, 140, 130, 130])
+    t_cond.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#0F172A')),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    story.append(t_cond)
+    story.append(Spacer(1, 15))
+
+    # Tabela 3: Rendimento de Biogás
+    story.append(Paragraph("<b>3. Resultados de Rendimento de Biogás e Metano</b>", sub_style))
     story.append(Spacer(1, 6))
     
-    data_rend = [["Razão (I:S)", "% CH4 no Biogás", "Volume Biogás (mL)", "Volume CH4 (mL)", "Rendimento (mL CH4 / g SV)"]]
+    data_rend = [["Razão (I:S)", "% CH4 no Biogás", "Vol. Biogás (mL)", "Vol. CH4 (mL)", "Rendimento (mL CH4 / g SV)"]]
     for r in item.get("dados_rendimento", []):
         data_rend.append([
             r.get("composicao", ""),
@@ -176,6 +206,7 @@ def gerar_pdf_relatorio_finalizado(item):
     t_rend.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#FEF3C7')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#92400E')),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
     ]))
@@ -1079,7 +1110,7 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
 
         with tab3:
             dados_r = item.get("dados_rendimento")
-            if item["tem_grafico"] and dados_r:
+            if item["status"] == "Finalizado" and dados_r:
                 labels = tuple([d["composicao"] for d in dados_r])
                 rend = tuple([d["rendimento"] for d in dados_r])
                 ch4 = tuple([d["fracao_metano"] for d in dados_r])
@@ -1088,13 +1119,14 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                 st.pyplot(fig)
                 
                 st.divider()
-                # Botão para baixar o PDF completo do Lançamento Finalizado
+                # Botão para baixar o PDF do Relatório Completo no Lançamento Finalizado
                 pdf_finalizado_bytes = gerar_pdf_relatorio_finalizado(item)
                 st.download_button(
                     label="📄 Baixar PDF do Relatório Completo",
                     data=pdf_finalizado_bytes,
-                    file_name=f"relatorio_final_{item['titulo'].lower().replace(' ', '_')}.pdf",
+                    file_name=f"relatorio_completo_{item['titulo'].lower().replace(' ', '_')}.pdf",
                     mime="application/pdf",
+                    key=f"btn_pdf_final_{item['id']}",
                     use_container_width=True,
                 )
             else:

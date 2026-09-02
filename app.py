@@ -1,10 +1,11 @@
 from datetime import date
 import matplotlib.pyplot as plt
 import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Co-digestão Anaeróbia", layout="wide")
 
-# Estilização CSS Dark Theme Limpa
+# Estilização CSS Dark Theme
 st.markdown(
     """
 <style>
@@ -33,7 +34,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Inicialização de estados do modal e formulário
+# Inicialização de estados
 if "abrir_modal_vol" not in st.session_state:
     st.session_state.abrir_modal_vol = False
 if "abrir_modal_rend" not in st.session_state:
@@ -43,6 +44,9 @@ if "etapa_modal_vol" not in st.session_state:
     st.session_state.etapa_modal_vol = 1
 if "etapa_modal_rend" not in st.session_state:
     st.session_state.etapa_modal_rend = 1
+
+if "scroll_to_novo" not in st.session_state:
+    st.session_state.scroll_to_novo = False
 
 if "compostos" not in st.session_state:
     st.session_state.compostos = [
@@ -58,29 +62,42 @@ if "condicoes" not in st.session_state:
 if "lista_lancamentos" not in st.session_state:
     st.session_state.lista_lancamentos = [
         {
+            "id": "l_1",
             "titulo": "Lançamento 09/06/2023",
             "status": "Finalizado",
             "data_str": "09/06/2023 • 31 dias de digestão",
             "tem_grafico": True,
+            "massa_sv_total": "18.5 g SV",
+            "carga_volumetrica": "0.105 g SV/mL",
             "compostos": [
                 {
                     "nome": "Inóculo 1",
                     "conc": "15.0 g/mL",
                     "qtd": "150.0 mL",
+                    "massa_sv": "12.0 g SV",
                 },
-                {"nome": "Substrato 1", "conc": "40.0 g/g", "qtd": "50.0 g"},
+                {
+                    "nome": "Substrato 1",
+                    "conc": "40.0 g/g",
+                    "qtd": "50.0 g",
+                    "massa_sv": "6.5 g SV",
+                },
             ],
         },
         {
+            "id": "l_2",
             "titulo": "Lançamento 16/06/2023",
             "status": "Em andamento",
             "data_str": "16/06/2023 • 31 dias de digestão",
             "tem_grafico": False,
+            "massa_sv_total": "14.4 g SV",
+            "carga_volumetrica": "0.082 g SV/mL",
             "compostos": [
                 {
                     "nome": "Inóculo 1",
                     "conc": "12.0 g/mL",
                     "qtd": "120.0 mL",
+                    "massa_sv": "14.4 g SV",
                 }
             ],
         },
@@ -88,11 +105,10 @@ if "lista_lancamentos" not in st.session_state:
 
 
 # ---------------------------------------------------------
-# MODAL 1: DIMENSIONAMENTO DO ENSAIO (3 ETAPAS)
+# MODAL 1: DIMENSIONAMENTO DO ENSAIO
 # ---------------------------------------------------------
 @st.dialog("Dimensionamento do Ensaio", width="small")
 def modal_calcular_volume():
-    # ETAPA 1: Caracterização dos Compostos
     if st.session_state.etapa_modal_vol == 1:
         st.markdown("### 1. Caracterização")
 
@@ -140,7 +156,6 @@ def modal_calcular_volume():
             st.session_state.etapa_modal_vol = 2
             st.rerun()
 
-    # ETAPA 2: Condições dos Reatores
     elif st.session_state.etapa_modal_vol == 2:
         st.markdown("### 2. Condições dos reatores")
 
@@ -195,16 +210,13 @@ def modal_calcular_volume():
             st.session_state.etapa_modal_vol = 3
             st.rerun()
 
-    # ETAPA 3: Identificação, Correção de pH e Período de Digestão
     elif st.session_state.etapa_modal_vol == 3:
         st.markdown("### 3. Identificação e Período")
 
-        st.markdown("**Nome do Lançamento**")
         nome_lancamento = st.text_input(
             "Nome do Lançamento",
             value=f"Lançamento {date.today().strftime('%d/%m/%Y')}",
             key="input_nome_lancamento",
-            label_visibility="collapsed",
         )
 
         st.write("")
@@ -233,25 +245,68 @@ def modal_calcular_volume():
         if col_finish.button(
             "🚀 Finalizar e Calcular", type="primary", key="btn_vol_finish"
         ):
-            # Adiciona o novo lançamento na lista do dashboard
+            vol_frasco = 250.0  # Volume total do reator (mL)
+            hs_medio = (
+                st.session_state.condicoes[0]["headspace"]
+                if st.session_state.condicoes
+                else 30.0
+            )
+            vol_util = vol_frasco * (
+                1 - (hs_medio / 100.0)
+            )  # Volume útil real
+
+            compostos_calculados = []
+            qtd_compostos = len(st.session_state.compostos)
+            massa_sv_total = 0.0
+
+            for c in st.session_state.compostos:
+                unidade = c["unidade"]
+                val_conc = c["valor"] if c["valor"] > 0 else 1.0
+
+                if unidade == "g/mL":
+                    qtd_val = round((vol_util / max(1, qtd_compostos)), 1)
+                    qtd_str = f"{qtd_val} mL"
+                    massa_sv = qtd_val * (val_conc / 100.0)
+                else:
+                    qtd_val = round(
+                        (vol_util / max(1, qtd_compostos)) * 0.5, 1
+                    )
+                    qtd_str = f"{qtd_val} g"
+                    massa_sv = qtd_val * (val_conc / 100.0)
+
+                massa_sv_total += massa_sv
+
+                compostos_calculados.append(
+                    {
+                        "nome": c["nome"],
+                        "conc": f"{c['valor']} {unidade}",
+                        "qtd": qtd_str,
+                        "massa_sv": f"{massa_sv:.2f} g SV",
+                    }
+                )
+
+            # Cálculo da Carga da composição (g SV / mL útil)
+            carga_composicao = (
+                massa_sv_total / vol_util if vol_util > 0 else 0.0
+            )
+
+            novo_id = f"lanc_{len(st.session_state.lista_lancamentos) + 1}"
             novo_item = {
+                "id": novo_id,
                 "titulo": nome_lancamento,
                 "status": "Em andamento",
                 "data_str": f"{d_inicio.strftime('%d/%m/%Y')} • {dias} dias de digestão",
                 "tem_grafico": False,
-                "compostos": [
-                    {
-                        "nome": c["nome"],
-                        "conc": f"{c['valor']} {c['unidade']}",
-                        "qtd": "0.0 mL",
-                    }
-                    for c in st.session_state.compostos
-                ],
+                "massa_sv_total": f"{massa_sv_total:.2f} g SV",
+                "carga_volumetrica": f"{carga_composicao:.3f} g SV/mL",
+                "compostos": compostos_calculados,
             }
 
             st.session_state.lista_lancamentos.insert(0, novo_item)
 
-            st.success("Lançamento adicionado com sucesso!")
+            st.session_state.toast_msg = "✅ Lançamento preparado com sucesso!"
+            st.session_state.scroll_to_novo = True
+
             st.session_state.etapa_modal_vol = 1
             st.session_state.abrir_modal_vol = False
             st.rerun()
@@ -326,7 +381,7 @@ def modal_calcular_rendimento():
         if st.button(
             "💾 Salvar Rendimento", use_container_width=True, type="primary"
         ):
-            st.success("Rendimento salvo!")
+            st.toast("Rendimento salvo com sucesso!", icon="🎉")
             st.session_state.etapa_modal_rend = 1
             st.session_state.abrir_modal_rend = False
             st.rerun()
@@ -343,6 +398,10 @@ def modal_calcular_rendimento():
 # INTERFACE PRINCIPAL (DASHBOARD)
 # ---------------------------------------------------------
 st.title("👋 Olá, [nome]!")
+
+if "toast_msg" in st.session_state and st.session_state.toast_msg:
+    st.toast(st.session_state.toast_msg, icon="🎉")
+    del st.session_state["toast_msg"]
 
 col_b1, col_b2, col_b3 = st.columns(3)
 with col_b1:
@@ -367,8 +426,13 @@ if st.session_state.abrir_modal_rend:
 st.write("---")
 st.subheader("Meus lançamentos")
 
-# Renderização dinâmica dos Lançamentos da Lista
+# Renderização dos Lançamentos com Massa de SV e Carga da Composição
 for idx, item in enumerate(st.session_state.lista_lancamentos):
+    if idx == 0:
+        st.markdown(
+            '<div id="novo-lancamento-anchor"></div>', unsafe_allow_html=True
+        )
+
     with st.expander(item["titulo"], expanded=(idx == 0)):
         if item["status"] == "Finalizado":
             st.markdown(
@@ -408,6 +472,19 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
 
         with g_col2:
             st.markdown("**Caracterização**")
+
+            # Exibição dos dados de Carga Orgânica da Composição
+            massa_total = item.get("massa_sv_total", "N/A")
+            carga = item.get("carga_volumetrica", "N/A")
+
+            st.caption(
+                f"⚖️ **Massa Total de SV adicionada:** `{massa_total}`"
+            )
+            st.caption(
+                f"🧪 **Carga da Composição (g SV/mL Útil):** `{carga}`"
+            )
+            st.write("---")
+
             for comp in item["compostos"]:
                 st.markdown(
                     f'<span class="pill-tag">{comp["nome"]}</span>',
@@ -417,3 +494,21 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                     f"Concentração de sólidos voláteis: {comp['conc']}"
                 )
                 st.caption(f"Quantidade inserida: {comp['qtd']}")
+                if "massa_sv" in comp:
+                    st.caption(f"Massa de SV: {comp['massa_sv']}")
+
+if st.session_state.scroll_to_novo:
+    st.session_state.scroll_to_novo = False
+    components.html(
+        """
+        <script>
+            setTimeout(function() {
+                var element = window.parent.document.getElementById('novo-lancamento-anchor');
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 300);
+        </script>
+        """,
+        height=0,
+    )

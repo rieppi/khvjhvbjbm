@@ -36,13 +36,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Inicialização de estados
-if "abrir_modal_vol" not in st.session_state:
-    st.session_state.abrir_modal_vol = False
-if "abrir_modal_rend" not in st.session_state:
-    st.session_state.abrir_modal_rend = False
-if "abrir_modal_otim" not in st.session_state:
-    st.session_state.abrir_modal_otim = False
+# Controle de Exibição Única de Modal
+if "modal_ativo" not in st.session_state:
+    st.session_state.modal_ativo = None
 
 if "etapa_modal_vol" not in st.session_state:
     st.session_state.etapa_modal_vol = 1
@@ -396,7 +392,7 @@ def modal_calcular_volume():
                 st.session_state.scroll_to_novo = True
 
                 st.session_state.etapa_modal_vol = 1
-                st.session_state.abrir_modal_vol = False
+                st.session_state.modal_ativo = None
                 st.rerun()
 
 
@@ -564,12 +560,12 @@ def modal_calcular_rendimento():
 
                 st.toast("Médias salvas e gráfico gerado com sucesso!", icon="🎉")
                 st.session_state.etapa_modal_rend = 1
-                st.session_state.abrir_modal_rend = False
+                st.session_state.modal_ativo = None
                 st.rerun()
 
 
 # ---------------------------------------------------------
-# MODAL 3: ESTIMAR MELHOR COMPOSIÇÃO (SÓ NUMPY/PANDAS)
+# MODAL 3: ESTIMAR MELHOR COMPOSIÇÃO
 # ---------------------------------------------------------
 @st.dialog("🎯 Estimativa Estatística da Melhor Composição", width="medium")
 def modal_estimar_composicao():
@@ -606,7 +602,6 @@ def modal_estimar_composicao():
 
     df = pd.DataFrame(historico_dados)
 
-    # Regressão por Mínimos Quadrados Nativa do NumPy
     X = np.column_stack(
         [
             np.ones(len(df)),
@@ -619,7 +614,6 @@ def modal_estimar_composicao():
 
     coef, residuals, rank, s = np.linalg.lstsq(X, y, rcond=None)
 
-    # Varredura para encontrar a melhor proporção no modelo
     grid_inoculo = np.linspace(0.1, 0.9, 100)
     melhor_rend = -1
     melhor_prop = (0.5, 0.5)
@@ -639,7 +633,6 @@ def modal_estimar_composicao():
             melhor_rend = rend_pred
             melhor_prop = (inoc, subst)
 
-    # Coeficiente R²
     y_pred = X @ coef
     ss_tot = np.sum((y - np.mean(y)) ** 2)
     ss_res = np.sum((y - y_pred) ** 2)
@@ -713,24 +706,23 @@ col_b1, col_b2, col_b3 = st.columns(3)
 with col_b1:
     if st.button("➤ Quero calcular o volume", use_container_width=True):
         st.session_state.etapa_modal_vol = 1
-        st.session_state.abrir_modal_vol = True
+        st.session_state.modal_ativo = "volume"
 
 with col_b2:
     if st.button("➤ Quero calcular o rendimento", use_container_width=True):
         st.session_state.etapa_modal_rend = 1
-        st.session_state.abrir_modal_rend = True
+        st.session_state.modal_ativo = "rendimento"
 
 with col_b3:
     if st.button("➤ Quero estimar a melhor composição", use_container_width=True):
-        st.session_state.abrir_modal_otim = True
+        st.session_state.modal_ativo = "otimizacao"
 
-if st.session_state.abrir_modal_vol:
+# Renderização do Modal Ativo (Garante apenas um por execução)
+if st.session_state.modal_ativo == "volume":
     modal_calcular_volume()
-
-if st.session_state.abrir_modal_rend:
+elif st.session_state.modal_ativo == "rendimento":
     modal_calcular_rendimento()
-
-if st.session_state.abrir_modal_otim:
+elif st.session_state.modal_ativo == "otimizacao":
     modal_estimar_composicao()
 
 st.write("---")

@@ -44,8 +44,29 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# FUNÇÕES AUXILIARES E GRÁFICOS
+# FUNÇÕES AUXILIARES, CÁLCULOS E GRÁFICOS
 # ---------------------------------------------------------
+def calcular_bicarbonato(ph_atual, ph_alvo, vol_util_ml):
+    """
+    Estima a massa de NaHCO3 necessária para elevar o pH do volume útil ao pH alvo (ex: 7.00).
+    Se ph_atual >= ph_alvo, retorna 0.
+    O cálculo baseia-se na variação da concentração de H+ e no poder tampão médio do bicarbonato.
+    """
+    if ph_atual >= ph_alvo or ph_atual <= 0:
+        return 0.0
+
+    delta_ph = ph_alvo - ph_atual
+    # Capacidade tampão estimada (β ≈ 0.015 a 0.025 mol/L por unidade de pH em efluentes anaeróbios)
+    beta = 0.02  # mol H+ / L / unidade de pH
+    vol_litros = vol_util_ml / 1000.0
+
+    # Moles de NaHCO3 necessários
+    moles_nahco3 = beta * delta_ph * vol_litros
+    # Massa molar do NaHCO3 = 84.007 g/mol
+    massa_g = moles_nahco3 * 84.007
+    return round(massa_g, 4)
+
+
 @st.cache_resource(show_spinner=False)
 def gerar_grafico_rendimento(labels, rend, ch4):
     fig, ax1 = plt.subplots(figsize=(6, 2.8))
@@ -122,7 +143,7 @@ def gerar_grafico_otimizacao(curva_x, curva_y, df_inoc, df_rend, p_otima, p1, p2
 
 
 def gerar_excel_quantidades(condicoes, compostos):
-    """Gera um arquivo Excel em memória com as quantidades calculadas por condição."""
+    """Gera um arquivo CSV compatível com Excel sem depender do openpyxl."""
     rows = []
     vol_frasco = 250.0
     qtd_compostos = len(compostos) if compostos else 1
@@ -160,10 +181,7 @@ def gerar_excel_quantidades(condicoes, compostos):
             )
 
     df = pd.DataFrame(rows)
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Quantidades_Reatores")
-    return output.getvalue()
+    return df.to_csv(index=False, sep=";").encode("utf-8-sig")
 
 
 # Inicialização de Estado
@@ -175,6 +193,8 @@ if "etapa_modal_rend" not in st.session_state:
     st.session_state.etapa_modal_rend = 1
 if "scroll_to_novo" not in st.session_state:
     st.session_state.scroll_to_novo = False
+if "resumo_calculo_popup" not in st.session_state:
+    st.session_state.resumo_calculo_popup = None
 
 if "compostos" not in st.session_state:
     st.session_state.compostos = [
@@ -184,8 +204,8 @@ if "compostos" not in st.session_state:
 
 if "condicoes" not in st.session_state:
     st.session_state.condicoes = [
-        {"headspace": 30.0, "composicao": "2:1", "replicas": 3, "ph_inicial": 7.0},
-        {"headspace": 30.0, "composicao": "1:1", "replicas": 3, "ph_inicial": 7.0},
+        {"headspace": 30.0, "composicao": "2:1", "replicas": 3, "ph_replicas": [6.5, 6.6, 6.5]},
+        {"headspace": 30.0, "composicao": "1:1", "replicas": 3, "ph_replicas": [6.8, 6.7, 6.8]},
     ]
 
 if "lista_lancamentos" not in st.session_state:
@@ -217,7 +237,8 @@ if "lista_lancamentos" not in st.session_state:
                     "carga": "0.082 g SV/mL",
                     "headspace": 30.0,
                     "replicas": 3,
-                    "ph_inicial": 7.2,
+                    "ph_replicas": [6.5, 6.6, 6.5],
+                    "nahco3_total_g": 0.315,
                     "massa_sv_val": 14.40,
                     "reagentes": [
                         {"nome": "Inóculo 1", "qtd": "120.0 mL"},
@@ -229,23 +250,12 @@ if "lista_lancamentos" not in st.session_state:
                     "carga": "0.082 g SV/mL",
                     "headspace": 30.0,
                     "replicas": 3,
-                    "ph_inicial": 7.0,
+                    "ph_replicas": [6.8, 6.7, 6.8],
+                    "nahco3_total_g": 0.147,
                     "massa_sv_val": 14.40,
                     "reagentes": [
                         {"nome": "Inóculo 1", "qtd": "87.5 mL"},
                         {"nome": "Substrato 1", "qtd": "87.5 g"},
-                    ],
-                },
-                {
-                    "proporcao": "1:2",
-                    "carga": "0.082 g SV/mL",
-                    "headspace": 30.0,
-                    "replicas": 3,
-                    "ph_inicial": 6.8,
-                    "massa_sv_val": 14.40,
-                    "reagentes": [
-                        {"nome": "Inóculo 1", "qtd": "60.0 mL"},
-                        {"nome": "Substrato 1", "qtd": "120.0 g"},
                     ],
                 },
             ],
@@ -264,13 +274,6 @@ if "lista_lancamentos" not in st.session_state:
                     "vol_ch4": 306.0,
                     "rendimento": 380.0,
                 },
-                {
-                    "composicao": "1:2",
-                    "fracao_metano": 62.0,
-                    "vol_biogas": 390.0,
-                    "vol_ch4": 241.8,
-                    "rendimento": 295.0,
-                },
             ],
         }
     ]
@@ -279,6 +282,52 @@ if "lista_lancamentos" not in st.session_state:
 # ---------------------------------------------------------
 # MODAIS
 # ---------------------------------------------------------
+@st.dialog("📋 Resumo do Lançamento e Correção de pH", width="medium")
+def modal_resumo_popup():
+    dados = st.session_state.resumo_calculo_popup
+    if not dados:
+        st.write("Sem dados para exibir.")
+        return
+
+    st.subheader(f"🧪 {dados['titulo']}")
+    st.caption(f"Período: {dados['data_str']}")
+    st.divider()
+
+    st.markdown("### 1. Quantidades de Compostos por Condição")
+    for cond in dados["detalhes_condicoes"]:
+        with st.container(border=True):
+            st.markdown(f"**Razão (I:S): `{cond['proporcao']}`** | Headspace: **{cond['headspace']}%** | Vol. Útil: **{cond['vol_util_ml']} mL** | Réplicas: **{cond['replicas']}**")
+            
+            c_comp, c_ph = st.columns([1.2, 1])
+            with c_comp:
+                st.markdown("**Substratos/Inóculo:**")
+                for r in cond["reagentes"]:
+                    st.write(f"• **{r['nome']}**: {r['qtd']} / reator (Total: {r['qtd_total_cond']})")
+
+            with c_ph:
+                st.markdown("**pH Inicial & Bicarbonato de Sódio ($\text{NaHCO}_3$):**")
+                for rep_i, ph_val in enumerate(cond["ph_replicas"]):
+                    bicarb_g = cond["bicarb_replicas"][rep_i]
+                    if bicarb_g > 0:
+                        st.write(f"• Réplica {rep_i+1} (pH {ph_val}): **{bicarb_g*1000:.1f} mg** $\text{{NaHCO}}_3$")
+                    else:
+                        st.write(f"• Réplica {rep_i+1} (pH {ph_val}): *pH OK (≥ 7.00)*")
+
+                st.markdown(f"**Total $\text{{NaHCO}}_3$ nesta condição:** `{cond['nahco3_total_g']:.3f} g`")
+
+    st.markdown("### 2. Totais Gerais do Ensaio")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Massa SV Total", f"{dados['massa_sv_total']:.2f} g")
+    m2.metric("Total $\text{NaHCO}_3$ Necessário", f"{dados['tot_bicarb_geral']:.3f} g")
+    m3.metric("Total de Reatores", dados['tot_reatores'])
+
+    st.divider()
+    if st.button("👍 Entendido / Sair", type="primary", use_container_width=True):
+        st.session_state.modal_ativo = None
+        st.session_state.resumo_calculo_popup = None
+        st.rerun()
+
+
 @st.dialog("➕ Registrar Novo Lançamento", width="small")
 def modal_calcular_volume():
     # ETAPA 1: Identificação e Período
@@ -367,7 +416,7 @@ def modal_calcular_volume():
 
         st.checkbox(
             "Fazer correção de pH no meio",
-            value=False,
+            value=True,
             key="cb_corrigir_ph",
         )
 
@@ -402,16 +451,18 @@ def modal_calcular_volume():
                     "Razão (I:S)", value=cond["composicao"], key=f"comp_{i}"
                 )
                 rep = c3.number_input(
-                    "Réplicas", value=int(cond["replicas"]), step=1, key=f"rep_{i}"
+                    "Réplicas", value=int(cond.get("replicas", 3)), min_value=1, step=1, key=f"rep_{i}"
                 )
 
-                ph_curr = cond.get("ph_inicial", 7.0)
+                ph_list = cond.get("ph_replicas", [6.8] * int(rep))
+                if len(ph_list) != int(rep):
+                    ph_list = [6.8] * int(rep)
 
                 st.session_state.condicoes[i] = {
                     "headspace": hs,
                     "composicao": comp,
                     "replicas": rep,
-                    "ph_inicial": ph_curr,
+                    "ph_replicas": ph_list,
                 }
 
         if usar_mesmo_hs:
@@ -421,19 +472,19 @@ def modal_calcular_volume():
         if st.button("➕ Adicionar Condição", key="add_cond"):
             padrao_hs = first_hs if usar_mesmo_hs else 30.0
             st.session_state.condicoes.append(
-                {"headspace": padrao_hs, "composicao": "1:1", "replicas": 3, "ph_inicial": 7.0}
+                {"headspace": padrao_hs, "composicao": "1:1", "replicas": 3, "ph_replicas": [6.8, 6.8, 6.8]}
             )
             st.rerun()
 
-        # Botão para baixar planilha Excel dos cálculos automáticos
+        # Exportação em CSV (compatível com Excel)
         excel_bytes = gerar_excel_quantidades(
             st.session_state.condicoes, st.session_state.compostos
         )
         st.download_button(
-            label="📥 Baixar Cálculo de Quantidades (.xlsx)",
+            label="📥 Baixar Cálculo de Quantidades (.csv)",
             data=excel_bytes,
-            file_name="calculo_quantidades_reatores.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            file_name="calculo_quantidades_reatores.csv",
+            mime="text/csv",
             use_container_width=True,
         )
 
@@ -450,24 +501,48 @@ def modal_calcular_volume():
                 st.session_state.etapa_modal_vol = 4
                 st.rerun()
 
-    # ETAPA 4: pH Inicial das Misturas
+    # ETAPA 4: pH Inicial de Cada Réplica & Cálculo de NaHCO3
     elif st.session_state.etapa_modal_vol == 4:
-        st.subheader("4. pH Inicial das Misturas")
-        st.caption("Informe o pH medido inicialmente para cada condição cadastrada:")
+        st.subheader("4. pH Inicial das Réplicas")
+        st.caption("Insira o pH inicial individual de cada réplica para calcular o Bicarbonato de Sódio ($\text{NaHCO}_3$) necessário até pH 7,00:")
+
+        vol_frasco = 250.0
 
         for i, cond in enumerate(st.session_state.condicoes):
+            num_rep = int(cond.get("replicas", 3))
+            lista_ph = cond.get("ph_replicas", [6.8] * num_rep)
+            if len(lista_ph) != num_rep:
+                lista_ph = [6.8] * num_rep
+
+            vol_util = vol_frasco * (1.0 - (float(cond["headspace"]) / 100.0))
+
             with st.container(border=True):
-                c_info, c_ph = st.columns([2, 1])
-                c_info.markdown(f"**Condição #{i+1}** - Razão (I:S): `{cond['composicao']}`")
-                val_ph = c_ph.number_input(
-                    "pH Inicial",
-                    min_value=0.0,
-                    max_value=14.0,
-                    value=float(cond.get("ph_inicial", 7.0)),
-                    step=0.1,
-                    key=f"ph_init_{i}",
-                )
-                st.session_state.condicoes[i]["ph_inicial"] = val_ph
+                st.markdown(f"**Condição #{i+1}** - Razão (I:S): `{cond['composicao']}` | Vol. Útil: **{vol_util:.1f} mL**")
+                
+                novos_phs = []
+                cols = st.columns(min(num_rep, 4))
+                for r in range(num_rep):
+                    col_idx = r % 4
+                    val_ph = cols[col_idx].number_input(
+                        f"Réplica {r+1}",
+                        min_value=0.0,
+                        max_value=14.0,
+                        value=float(lista_ph[r]),
+                        step=0.1,
+                        key=f"ph_cond_{i}_rep_{r}",
+                    )
+                    novos_phs.append(val_ph)
+
+                st.session_state.condicoes[i]["ph_replicas"] = novos_phs
+
+                # Exibe estimativa prévia de NaHCO3 para esta condição
+                bicarb_por_rep = [calcular_bicarbonato(p, 7.00, vol_util) for p in novos_phs]
+                tot_cond_bicarb = sum(bicarb_por_rep)
+
+                if tot_cond_bicarb > 0:
+                    st.caption(f"💡 Estimativa de $\text{{NaHCO}}_3$ para esta condição: **{tot_cond_bicarb*1000:.1f} mg** ({tot_cond_bicarb:.3f} g)")
+                else:
+                    st.caption("✅ pH inicial está adequado (≥ 7.00). Nenhum bicarbonato necessário.")
 
         st.divider()
 
@@ -484,74 +559,81 @@ def modal_calcular_volume():
                 use_container_width=True,
             ):
                 vol_frasco = 250.0
-                hs_medio = (
-                    st.session_state.condicoes[0]["headspace"]
-                    if st.session_state.condicoes
-                    else 30.0
-                )
-                vol_util = vol_frasco * (1 - (hs_medio / 100.0))
-
-                compostos_calculados = []
                 qtd_compostos = len(st.session_state.compostos)
-                massa_sv_total = 0.0
-                total_replicas = sum(
-                    c["replicas"] for c in st.session_state.condicoes
-                )
+                total_replicas_geral = sum(c["replicas"] for c in st.session_state.condicoes)
+                
+                massa_sv_total_geral = 0.0
+                tot_bicarb_geral = 0.0
 
-                for c in st.session_state.compostos:
-                    unidade = c["unidade"]
-                    val_conc = c["valor"] if c["valor"] > 0 else 1.0
+                composicoes_estudadas = []
+                detalhes_popup_condicoes = []
 
-                    if unidade == "g/mL":
-                        qtd_por_reator = round(
-                            (vol_util / max(1, qtd_compostos)), 1
-                        )
-                        qtd_total_ensaio = round(
-                            qtd_por_reator * max(1, total_replicas), 1
-                        )
-                        qtd_str = f"{qtd_por_reator} mL"
-                        qtd_total_str = f"{qtd_total_ensaio} mL"
-                        massa_sv = qtd_por_reator * (val_conc / 100.0)
-                    else:
-                        qtd_por_reator = round(
-                            (vol_util / max(1, qtd_compostos)) * 0.5, 1
-                        )
-                        qtd_total_ensaio = round(
-                            qtd_por_reator * max(1, total_replicas), 1
-                        )
-                        qtd_str = f"{qtd_por_reator} g"
-                        qtd_total_str = f"{qtd_total_ensaio} g"
-                        massa_sv = qtd_por_reator * (val_conc / 100.0)
+                compostos_calculados_geral = []
 
-                    massa_sv_total += massa_sv
-                    compostos_calculados.append(
-                        {
+                for cond in st.session_state.condicoes:
+                    hs = float(cond["headspace"])
+                    vol_util = vol_frasco * (1.0 - (hs / 100.0))
+                    num_rep = int(cond["replicas"])
+                    phs = cond.get("ph_replicas", [7.0] * num_rep)
+
+                    # Cálculo de reagentes para esta condição
+                    reagentes_cond = []
+                    massa_sv_cond = 0.0
+
+                    for c in st.session_state.compostos:
+                        unidade = c["unidade"]
+                        val_conc = c["valor"] if c["valor"] > 0 else 1.0
+
+                        if unidade == "g/mL":
+                            qtd_por_reator = round(vol_util / max(1, qtd_compostos), 1)
+                            qtd_str = f"{qtd_por_reator} mL"
+                            qtd_tot_cond = f"{qtd_por_reator * num_rep:.1f} mL"
+                            massa_sv = qtd_por_reator * (val_conc / 100.0)
+                        else:
+                            qtd_por_reator = round((vol_util / max(1, qtd_compostos)) * 0.5, 1)
+                            qtd_str = f"{qtd_por_reator} g"
+                            qtd_tot_cond = f"{qtd_por_reator * num_rep:.1f} g"
+                            massa_sv = qtd_por_reator * (val_conc / 100.0)
+
+                        massa_sv_cond += massa_sv
+                        reagentes_cond.append({
                             "nome": c["nome"],
-                            "conc": f"{c['valor']} {unidade}",
                             "qtd": qtd_str,
-                            "qtd_total": qtd_total_str,
-                        }
-                    )
+                            "qtd_total_cond": qtd_tot_cond
+                        })
 
-                carga_composicao = (
-                    massa_sv_total / vol_util if vol_util > 0 else 0.0
-                )
-                composicoes_estudadas = [
-                    {
+                    massa_sv_total_geral += (massa_sv_cond * num_rep)
+                    carga_comp = massa_sv_cond / vol_util if vol_util > 0 else 0.0
+
+                    # Cálculo de Bicarbonato por réplica nesta condição
+                    bicarb_reps = [calcular_bicarbonato(p, 7.00, vol_util) for p in phs]
+                    tot_bicarb_cond = sum(bicarb_reps)
+                    tot_bicarb_geral += tot_bicarb_cond
+
+                    composicoes_estudadas.append({
                         "proporcao": cond["composicao"],
-                        "carga": f"{carga_composicao:.3f} g SV/mL",
-                        "headspace": cond["headspace"],
-                        "replicas": cond["replicas"],
-                        "ph_inicial": cond.get("ph_inicial", 7.0),
-                        "massa_sv_val": massa_sv_total,
-                        "reagentes": [
-                            {"nome": comp["nome"], "qtd": comp["qtd"]}
-                            for comp in compostos_calculados
-                        ],
-                    }
-                    for cond in st.session_state.condicoes
-                ]
+                        "carga": f"{carga_comp:.3f} g SV/mL",
+                        "headspace": hs,
+                        "replicas": num_rep,
+                        "ph_replicas": phs,
+                        "bicarb_replicas_g": bicarb_reps,
+                        "nahco3_total_g": tot_bicarb_cond,
+                        "massa_sv_val": massa_sv_cond,
+                        "reagentes": reagentes_cond,
+                    })
 
+                    detalhes_popup_condicoes.append({
+                        "proporcao": cond["composicao"],
+                        "headspace": hs,
+                        "vol_util_ml": vol_util,
+                        "replicas": num_rep,
+                        "reagentes": reagentes_cond,
+                        "ph_replicas": phs,
+                        "bicarb_replicas": bicarb_reps,
+                        "nahco3_total_g": tot_bicarb_cond,
+                    })
+
+                # Consolidação para salvar
                 nome_lan = st.session_state.get(
                     "temp_nome_lancamento",
                     f"Lançamento {date.today().strftime('%d/%m/%Y')}",
@@ -559,25 +641,43 @@ def modal_calcular_volume():
                 dt_ini = st.session_state.get("temp_dt_inicio", date.today())
                 dias_lan = st.session_state.get("temp_dias", 0)
 
+                # Monta lista de compostos consolidados para a aba 1
+                for c in st.session_state.compostos:
+                    compostos_calculados_geral.append({
+                        "nome": c["nome"],
+                        "conc": f"{c['valor']} {c['unidade']}",
+                    })
+
                 novo_item = {
                     "id": f"lanc_{len(st.session_state.lista_lancamentos) + 1}",
                     "titulo": nome_lan,
                     "status": "Em andamento",
                     "data_str": f"{dt_ini.strftime('%d/%m/%Y')} • {dias_lan} dias de digestão",
                     "tem_grafico": False,
-                    "massa_sv_total_val": massa_sv_total,
-                    "massa_sv_total": f"{massa_sv_total:.2f} g SV",
-                    "carga_volumetrica": f"{carga_composicao:.3f} g SV/mL",
-                    "compostos": compostos_calculados,
+                    "massa_sv_total_val": massa_sv_total_geral,
+                    "massa_sv_total": f"{massa_sv_total_geral:.2f} g SV",
+                    "carga_volumetrica": f"{composicoes_estudadas[0]['carga']}",
+                    "compostos": compostos_calculados_geral,
                     "composicoes_estudadas": composicoes_estudadas,
                     "dados_rendimento": None,
                 }
 
                 st.session_state.lista_lancamentos.insert(0, novo_item)
-                st.session_state.toast_msg = "✅ Lançamento criado com sucesso!"
+                
+                # Prepara os dados para o Pop-up de Resumo
+                st.session_state.resumo_calculo_popup = {
+                    "titulo": nome_lan,
+                    "data_str": f"{dt_ini.strftime('%d/%m/%Y')} • {dias_lan} dias de digestão",
+                    "detalhes_condicoes": detalhes_popup_condicoes,
+                    "massa_sv_total": massa_sv_total_geral,
+                    "tot_bicarb_geral": tot_bicarb_geral,
+                    "tot_reatores": total_replicas_geral,
+                }
+
+                st.session_state.toast_msg = "✅ Lançamento e cálculos concluídos!"
                 st.session_state.scroll_to_novo = True
                 st.session_state.etapa_modal_vol = 1
-                st.session_state.modal_ativo = None
+                st.session_state.modal_ativo = "popup_resumo"
                 st.rerun()
 
 
@@ -603,16 +703,18 @@ def modal_calcular_rendimento():
             prop = comp["proporcao"]
             massa_sv = comp.get("massa_sv_val", 1.0)
             num_replicas = int(comp.get("replicas", 3))
+            phs = comp.get("ph_replicas", [])
 
             with st.container(border=True):
                 st.markdown(f"### 🧪 Razão `(I:S) {prop}`")
                 st.caption(
-                    f"Headspace: {comp.get('headspace', 30.0)}% | Réplicas: {num_replicas} | pH Inicial: {comp.get('ph_inicial', 'N/A')}"
+                    f"Headspace: {comp.get('headspace', 30.0)}% | Réplicas: {num_replicas}"
                 )
                 replicas_comp = []
 
                 for rep in range(1, num_replicas + 1):
-                    st.caption(f"**Réplica {rep}**")
+                    ph_rep = phs[rep - 1] if len(phs) >= rep else "N/A"
+                    st.caption(f"**Réplica {rep}** (pH Inicial: `{ph_rep}`)")
                     c1, c2 = st.columns(2)
                     metano_pct = c1.number_input(
                         "Metano (% CH₄)",
@@ -788,7 +890,7 @@ def modal_estimar_composicao():
 
 
 # ---------------------------------------------------------
-# DASHBOARD
+# DASHBOARD PRINCIPAL
 # ---------------------------------------------------------
 st.title("👋 Olá, Pesquisador!")
 st.caption("Acompanhamento e otimização dos processos de co-digestão")
@@ -807,7 +909,7 @@ with col_b1:
         st.session_state.etapa_modal_vol = 1
         st.session_state.modal_ativo = "volume"
     st.caption(
-        "Registre e calcule automaticamente o volume ou massa dos compostos a serem utilizados"
+        "Registre e calcule automaticamente o volume ou massa dos compostos e o bicarbonato"
     )
 
 with col_b2:
@@ -832,6 +934,8 @@ elif st.session_state.modal_ativo == "rendimento":
     modal_calcular_rendimento()
 elif st.session_state.modal_ativo == "otimizacao":
     modal_estimar_composicao()
+elif st.session_state.modal_ativo == "popup_resumo":
+    modal_resumo_popup()
 
 st.divider()
 st.subheader("📁 Meus Lançamentos")
@@ -873,21 +977,35 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
                     unsafe_allow_html=True,
                 )
                 st.caption(
-                    f"Concentração: **{comp['conc']}** | Total utilizado: **{comp.get('qtd_total', 'N/A')}**"
+                    f"Concentração: **{comp['conc']}**"
                 )
 
         with tab2:
-            st.markdown("**Composições e Parâmetros dos Reatores:**")
+            st.markdown("**Composições, pH Inicial e Dosagem de Bicarbonato de Sódio ($\text{NaHCO}_3$):**")
             for comp_est in item.get("composicoes_estudadas", []):
                 with st.container(border=True):
-                    c_prop, c_carga, c_hs, c_rep, c_ph = st.columns(5)
-                    c_prop.markdown(
-                        f"**Razão (I:S):** `{comp_est['proporcao']}`"
-                    )
+                    c_prop, c_carga, c_hs, c_rep = st.columns(4)
+                    c_prop.markdown(f"**Razão (I:S):** `{comp_est['proporcao']}`")
                     c_carga.markdown(f"**Carga Orgânica:** `{comp_est['carga']}`")
                     c_hs.markdown(f"**Headspace:** `{comp_est.get('headspace', 'N/A')}%`")
                     c_rep.markdown(f"**Réplicas:** `{comp_est.get('replicas', 'N/A')}`")
-                    c_ph.markdown(f"**pH Inicial:** `{comp_est.get('ph_inicial', 'N/A')}`")
+
+                    # pH e Bicarbonato
+                    phs = comp_est.get("ph_replicas", [])
+                    bicarb_reps = comp_est.get("bicarb_replicas_g", [])
+                    tot_bicarb = comp_est.get("nahco3_total_g", 0.0)
+
+                    st.markdown("**pH Inicial / Réplica & Dosagem de $\text{NaHCO}_3$ para pH 7,00:**")
+                    cols_ph = st.columns(min(len(phs), 4)) if phs else []
+                    for r_idx, ph_v in enumerate(phs):
+                        col_target = cols_ph[r_idx % 4]
+                        bic_v = bicarb_reps[r_idx] if r_idx < len(bicarb_reps) else 0.0
+                        if bic_v > 0:
+                            col_target.caption(f"Réplica {r_idx+1}: **pH {ph_v}** → `{bic_v*1000:.1f} mg`")
+                        else:
+                            col_target.caption(f"Réplica {r_idx+1}: **pH {ph_v}** → `0.0 mg`")
+
+                    st.caption(f" Total de $\text{{NaHCO}}_3$ na condição: **{tot_bicarb:.3f} g** ({tot_bicarb*1000:.1f} mg)")
 
                     st.caption("**Quantidades por Reator:**")
                     for r in comp_est["reagentes"]:

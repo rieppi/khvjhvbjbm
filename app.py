@@ -1,4 +1,5 @@
 from datetime import date
+import io
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -43,7 +44,7 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# FUNÇÕES COM CACHE CORRIGIDO PARA OBJETOS MATPLOTLIB
+# FUNÇÕES AUXILIARES E GRÁFICOS
 # ---------------------------------------------------------
 @st.cache_resource(show_spinner=False)
 def gerar_grafico_rendimento(labels, rend, ch4):
@@ -120,6 +121,51 @@ def gerar_grafico_otimizacao(curva_x, curva_y, df_inoc, df_rend, p_otima, p1, p2
     return fig
 
 
+def gerar_excel_quantidades(condicoes, compostos):
+    """Gera um arquivo Excel em memória com as quantidades calculadas por condição."""
+    rows = []
+    vol_frasco = 250.0
+    qtd_compostos = len(compostos) if compostos else 1
+
+    for idx, cond in enumerate(condicoes):
+        hs = float(cond.get("headspace", 30.0))
+        vol_util = vol_frasco * (1 - (hs / 100.0))
+        replicas = int(cond.get("replicas", 3))
+
+        for c in compostos:
+            unidade = c.get("unidade", "g/mL")
+            val_conc = c.get("valor", 0.0)
+
+            if unidade == "g/mL":
+                qtd_reator = round(vol_util / max(1, qtd_compostos), 1)
+                unit_str = "mL"
+            else:
+                qtd_reator = round((vol_util / max(1, qtd_compostos)) * 0.5, 1)
+                unit_str = "g"
+
+            qtd_total_ensaio = round(qtd_reator * replicas, 1)
+
+            rows.append(
+                {
+                    "Condição": f"Condição #{idx+1}",
+                    "Razão (I:S)": cond.get("composicao", "1:1"),
+                    "Headspace (%)": hs,
+                    "Volume Útil/Reator (mL)": vol_util,
+                    "Réplicas": replicas,
+                    "Composto": c.get("nome", ""),
+                    "Concentração SV": f"{val_conc} {unidade}",
+                    "Qtd / Reator": f"{qtd_reator} {unit_str}",
+                    "Qtd Total Ensaios": f"{qtd_total_ensaio} {unit_str}",
+                }
+            )
+
+    df = pd.DataFrame(rows)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Quantidades_Reatores")
+    return output.getvalue()
+
+
 # Inicialização de Estado
 if "modal_ativo" not in st.session_state:
     st.session_state.modal_ativo = None
@@ -138,8 +184,8 @@ if "compostos" not in st.session_state:
 
 if "condicoes" not in st.session_state:
     st.session_state.condicoes = [
-        {"headspace": 30.0, "composicao": "2:1", "replicas": 3},
-        {"headspace": 30.0, "composicao": "1:1", "replicas": 3},
+        {"headspace": 30.0, "composicao": "2:1", "replicas": 3, "ph_inicial": 7.0},
+        {"headspace": 30.0, "composicao": "1:1", "replicas": 3, "ph_inicial": 7.0},
     ]
 
 if "lista_lancamentos" not in st.session_state:
@@ -171,6 +217,7 @@ if "lista_lancamentos" not in st.session_state:
                     "carga": "0.082 g SV/mL",
                     "headspace": 30.0,
                     "replicas": 3,
+                    "ph_inicial": 7.2,
                     "massa_sv_val": 14.40,
                     "reagentes": [
                         {"nome": "Inóculo 1", "qtd": "120.0 mL"},
@@ -182,6 +229,7 @@ if "lista_lancamentos" not in st.session_state:
                     "carga": "0.082 g SV/mL",
                     "headspace": 30.0,
                     "replicas": 3,
+                    "ph_inicial": 7.0,
                     "massa_sv_val": 14.40,
                     "reagentes": [
                         {"nome": "Inóculo 1", "qtd": "87.5 mL"},
@@ -193,6 +241,7 @@ if "lista_lancamentos" not in st.session_state:
                     "carga": "0.082 g SV/mL",
                     "headspace": 30.0,
                     "replicas": 3,
+                    "ph_inicial": 6.8,
                     "massa_sv_val": 14.40,
                     "reagentes": [
                         {"nome": "Inóculo 1", "qtd": "60.0 mL"},
@@ -232,6 +281,7 @@ if "lista_lancamentos" not in st.session_state:
 # ---------------------------------------------------------
 @st.dialog("➕ Registrar Novo Lançamento", width="small")
 def modal_calcular_volume():
+    # ETAPA 1: Identificação e Período
     if st.session_state.etapa_modal_vol == 1:
         st.subheader("1. Identificação e Período")
 
@@ -240,9 +290,6 @@ def modal_calcular_volume():
             value=f"Lançamento {date.today().strftime('%d/%m/%Y')}",
             key="input_nome_lancamento",
         )
-
-        st.checkbox("Fazer correção de pH no meio", value=False)
-        st.divider()
 
         st.markdown("**Período de Digestão Estimado**")
         d_col1, d_col2 = st.columns(2)
@@ -262,52 +309,9 @@ def modal_calcular_volume():
                 st.session_state.etapa_modal_vol = 2
                 st.rerun()
 
+    # ETAPA 2: Caracterização dos Compostos
     elif st.session_state.etapa_modal_vol == 2:
-        st.subheader("2. Condições dos Reatores")
-
-        for i, cond in enumerate(st.session_state.condicoes):
-            with st.container(border=True):
-                st.markdown(f"**Condição #{i+1}**")
-                c1, c2, c3 = st.columns(3)
-                hs = c1.number_input(
-                    "Headspace (%)",
-                    value=float(cond["headspace"]),
-                    step=5.0,
-                    key=f"hs_{i}",
-                )
-                comp = c2.text_input(
-                    "Razão (I:S)", value=cond["composicao"], key=f"comp_{i}"
-                )
-                rep = c3.number_input(
-                    "Réplicas", value=int(cond["replicas"]), step=1, key=f"rep_{i}"
-                )
-
-                st.session_state.condicoes[i] = {
-                    "headspace": hs,
-                    "composicao": comp,
-                    "replicas": rep,
-                }
-
-        if st.button("➕ Adicionar Condição", key="add_cond"):
-            st.session_state.condicoes.append(
-                {"headspace": 30.0, "composicao": "1:1", "replicas": 3}
-            )
-            st.rerun()
-
-        st.divider()
-
-        col_back, col_next = st.columns(2)
-        with col_back:
-            if st.button("⬅ Voltar", use_container_width=True):
-                st.session_state.etapa_modal_vol = 1
-                st.rerun()
-        with col_next:
-            if st.button("Próximo ➔", use_container_width=True, type="primary"):
-                st.session_state.etapa_modal_vol = 3
-                st.rerun()
-
-    elif st.session_state.etapa_modal_vol == 3:
-        st.subheader("3. Caracterização dos Compostos")
+        st.subheader("2. Caracterização dos Compostos")
 
         for i, comp in enumerate(st.session_state.compostos):
             with st.container(border=True):
@@ -347,10 +351,130 @@ def modal_calcular_volume():
 
         st.divider()
 
-        col_back, col_finish = st.columns(2)
+        col_back, col_next = st.columns(2)
+        with col_back:
+            if st.button("⬅ Voltar", use_container_width=True):
+                st.session_state.etapa_modal_vol = 1
+                st.rerun()
+        with col_next:
+            if st.button("Próximo ➔", use_container_width=True, type="primary"):
+                st.session_state.etapa_modal_vol = 3
+                st.rerun()
+
+    # ETAPA 3: Condições dos Reatores
+    elif st.session_state.etapa_modal_vol == 3:
+        st.subheader("3. Condições dos Reatores")
+
+        st.checkbox(
+            "Fazer correção de pH no meio",
+            value=False,
+            key="cb_corrigir_ph",
+        )
+
+        usar_mesmo_hs = st.checkbox(
+            "Usar o mesmo Headspace para todas as condições",
+            value=True,
+            key="cb_mesmo_headspace",
+        )
+
+        first_hs = float(st.session_state.condicoes[0]["headspace"])
+
+        for i, cond in enumerate(st.session_state.condicoes):
+            with st.container(border=True):
+                st.markdown(f"**Condição #{i+1}**")
+                c1, c2, c3 = st.columns(3)
+
+                disable_hs = usar_mesmo_hs and i > 0
+                val_hs = first_hs if disable_hs else float(cond["headspace"])
+
+                hs = c1.number_input(
+                    "Headspace (%)",
+                    value=val_hs,
+                    step=5.0,
+                    disabled=disable_hs,
+                    key=f"hs_{i}",
+                )
+
+                if i == 0 and usar_mesmo_hs:
+                    first_hs = hs
+
+                comp = c2.text_input(
+                    "Razão (I:S)", value=cond["composicao"], key=f"comp_{i}"
+                )
+                rep = c3.number_input(
+                    "Réplicas", value=int(cond["replicas"]), step=1, key=f"rep_{i}"
+                )
+
+                ph_curr = cond.get("ph_inicial", 7.0)
+
+                st.session_state.condicoes[i] = {
+                    "headspace": hs,
+                    "composicao": comp,
+                    "replicas": rep,
+                    "ph_inicial": ph_curr,
+                }
+
+        if usar_mesmo_hs:
+            for cond in st.session_state.condicoes:
+                cond["headspace"] = first_hs
+
+        if st.button("➕ Adicionar Condição", key="add_cond"):
+            padrao_hs = first_hs if usar_mesmo_hs else 30.0
+            st.session_state.condicoes.append(
+                {"headspace": padrao_hs, "composicao": "1:1", "replicas": 3, "ph_inicial": 7.0}
+            )
+            st.rerun()
+
+        # Botão para baixar planilha Excel dos cálculos automáticos
+        excel_bytes = gerar_excel_quantidades(
+            st.session_state.condicoes, st.session_state.compostos
+        )
+        st.download_button(
+            label="📥 Baixar Cálculo de Quantidades (.xlsx)",
+            data=excel_bytes,
+            file_name="calculo_quantidades_reatores.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+
+        st.divider()
+
+        col_back, col_next = st.columns(2)
         with col_back:
             if st.button("⬅ Voltar", use_container_width=True):
                 st.session_state.etapa_modal_vol = 2
+                st.rerun()
+
+        with col_next:
+            if st.button("Próximo ➔", use_container_width=True, type="primary"):
+                st.session_state.etapa_modal_vol = 4
+                st.rerun()
+
+    # ETAPA 4: pH Inicial das Misturas
+    elif st.session_state.etapa_modal_vol == 4:
+        st.subheader("4. pH Inicial das Misturas")
+        st.caption("Informe o pH medido inicialmente para cada condição cadastrada:")
+
+        for i, cond in enumerate(st.session_state.condicoes):
+            with st.container(border=True):
+                c_info, c_ph = st.columns([2, 1])
+                c_info.markdown(f"**Condição #{i+1}** - Razão (I:S): `{cond['composicao']}`")
+                val_ph = c_ph.number_input(
+                    "pH Inicial",
+                    min_value=0.0,
+                    max_value=14.0,
+                    value=float(cond.get("ph_inicial", 7.0)),
+                    step=0.1,
+                    key=f"ph_init_{i}",
+                )
+                st.session_state.condicoes[i]["ph_inicial"] = val_ph
+
+        st.divider()
+
+        col_back, col_finish = st.columns(2)
+        with col_back:
+            if st.button("⬅ Voltar", use_container_width=True):
+                st.session_state.etapa_modal_vol = 3
                 st.rerun()
 
         with col_finish:
@@ -418,6 +542,7 @@ def modal_calcular_volume():
                         "carga": f"{carga_composicao:.3f} g SV/mL",
                         "headspace": cond["headspace"],
                         "replicas": cond["replicas"],
+                        "ph_inicial": cond.get("ph_inicial", 7.0),
                         "massa_sv_val": massa_sv_total,
                         "reagentes": [
                             {"nome": comp["nome"], "qtd": comp["qtd"]}
@@ -481,7 +606,9 @@ def modal_calcular_rendimento():
 
             with st.container(border=True):
                 st.markdown(f"### 🧪 Razão `(I:S) {prop}`")
-                st.caption(f"Headspace: {comp.get('headspace', 30.0)}% | Réplicas: {num_replicas}")
+                st.caption(
+                    f"Headspace: {comp.get('headspace', 30.0)}% | Réplicas: {num_replicas} | pH Inicial: {comp.get('ph_inicial', 'N/A')}"
+                )
                 replicas_comp = []
 
                 for rep in range(1, num_replicas + 1):
@@ -753,13 +880,14 @@ for idx, item in enumerate(st.session_state.lista_lancamentos):
             st.markdown("**Composições e Parâmetros dos Reatores:**")
             for comp_est in item.get("composicoes_estudadas", []):
                 with st.container(border=True):
-                    c_prop, c_carga, c_hs, c_rep = st.columns(4)
+                    c_prop, c_carga, c_hs, c_rep, c_ph = st.columns(5)
                     c_prop.markdown(
                         f"**Razão (I:S):** `{comp_est['proporcao']}`"
                     )
                     c_carga.markdown(f"**Carga Orgânica:** `{comp_est['carga']}`")
                     c_hs.markdown(f"**Headspace:** `{comp_est.get('headspace', 'N/A')}%`")
                     c_rep.markdown(f"**Réplicas:** `{comp_est.get('replicas', 'N/A')}`")
+                    c_ph.markdown(f"**pH Inicial:** `{comp_est.get('ph_inicial', 'N/A')}`")
 
                     st.caption("**Quantidades por Reator:**")
                     for r in comp_est["reagentes"]:
